@@ -5,8 +5,10 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "echo \"DATABASE_URL set: $([ -n \"$DATABASE_URL\" ] && echo yes || echo NO)\" && echo \"ENCRYPTION_KEY set: $([ -n \"$ENCRYPTION_KEY\" ] && echo yes || echo NO)\" && if [ -n \"$DATABASE_URL\" ]; then npx prisma migrate deploy; fi && node server.js",
+    "startCommand": "npx prisma migrate deploy && node server.js",
+    "healthcheckPath": "/api/v1/health",
+    "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 2
+    "restartPolicyMaxRetries": 5
   }
 }

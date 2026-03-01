@@ -42,7 +42,7 @@ COPY --from=builder /app/public ./public
 
 # Copy Prisma schema + migrations (for migrate deploy)
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /app/prisma.config.mjs ./prisma.config.mjs
 COPY --from=builder /app/src/generated ./src/generated
 
 # Copy node_modules for Prisma runtime
