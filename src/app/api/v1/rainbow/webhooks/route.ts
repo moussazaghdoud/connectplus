@@ -8,37 +8,32 @@ import { metrics } from "@/lib/observability/metrics";
 import { logger } from "@/lib/observability/logger";
 
 /**
- * POST /api/v1/rainbow/webhooks/[[...path]]
+ * POST /api/v1/rainbow/webhooks — S2S callback from Rainbow CPaaS.
  *
- * Optional catch-all for Rainbow S2S callbacks.
- * Handles both /webhooks (base) and /webhooks/telephony/rvcp (sub-paths).
+ * Rainbow appends sub-paths (/telephony/rvcp, /connection, etc.) to the
+ * callback URL. Middleware rewrites those to this route with ?subpath=...
  *
- * Rainbow appends sub-paths to the callback URL:
- *   /connection, /presence, /telephony/rvcp, /message, etc.
+ * Auth is skipped (Rainbow uses its own callback mechanism).
  */
 export const POST = apiHandler(
   async (request: NextRequest, ctx) => {
     const body = await request.json();
 
-    // Extract the sub-path as event type (e.g. "telephony/rvcp", "connection")
+    // Sub-path comes from middleware rewrite (e.g. "telephony/rvcp", "connection")
     const url = new URL(request.url);
-    const fullPath = url.pathname;
-    const basePath = "/api/v1/rainbow/webhooks";
-    const subPath = fullPath.length > basePath.length
-      ? fullPath.slice(basePath.length + 1).replace(/\/$/, "")
-      : "";
+    const subPath = url.searchParams.get("subpath") ?? "";
 
     const eventType = subPath || body?.eventType || body?.type || "unknown";
     const tenantId = url.searchParams.get("tenant") ?? ctx.tenant.tenantId;
 
     logger.info(
-      { eventType, subPath, callId: body?.callId, tenantId, fullPath },
+      { eventType, subPath, callId: body?.callId, tenantId },
       "Rainbow S2S callback received"
     );
 
     metrics.increment("rainbow_callback", { eventType });
 
-    // Emit to event bus for processing
+    // Emit to event bus for processing (with tenantId for inbound routing)
     eventBus.emit("rainbow.callback", {
       eventType,
       tenantId,
