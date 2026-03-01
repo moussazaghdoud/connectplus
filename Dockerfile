@@ -11,6 +11,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
+# cache-bust: v2
 
 COPY . .
 
@@ -56,4 +57,4 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["sh", "start.sh"]
