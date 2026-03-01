@@ -38,6 +38,12 @@ class InboundCallHandler {
     const { eventType, tenantId, payload } = event;
     const body = payload as Record<string, unknown>;
 
+    // Handle Rainbow S2S telephony sub-path events
+    if (eventType === "telephony/rvcp" || eventType === "telephony/pcg") {
+      await this.handleTelephonyEvent(tenantId, body);
+      return;
+    }
+
     // Handle different call lifecycle events
     switch (eventType) {
       case "call.ringing":
@@ -59,7 +65,7 @@ class InboundCallHandler {
         break;
 
       default:
-        // Not an inbound call event we handle
+        logger.debug({ eventType, tenantId }, "Unhandled callback event type");
         break;
     }
   }
@@ -187,6 +193,70 @@ class InboundCallHandler {
       status: newStatus,
       rainbowCallId: callId,
     });
+  }
+
+  /**
+   * Handle Rainbow S2S telephony events (from /telephony/rvcp or /telephony/pcg sub-paths).
+   * These contain call state in a nested event object with calls/legs/endpoints arrays.
+   */
+  private async handleTelephonyEvent(
+    tenantId: string,
+    body: Record<string, unknown>
+  ): Promise<void> {
+    const eventObj = body.event as Record<string, unknown> | undefined;
+    if (!eventObj) {
+      logger.debug({ tenantId, body }, "Telephony event with no event object");
+      return;
+    }
+
+    const calls = eventObj.calls as Array<Record<string, unknown>> | undefined;
+    const legs = eventObj.legs as Array<Record<string, unknown>> | undefined;
+
+    // Extract call info from calls array or legs array
+    if (calls && calls.length > 0) {
+      for (const call of calls) {
+        const callId = (call.callId as string) ?? (call.id as string) ?? "unknown";
+        const status = (call.status as string) ?? "";
+        const callerNumber = (call.callingPartyNumber as string) ??
+          (call.remotePartyNumber as string) ?? "";
+
+        logger.info(
+          { tenantId, callId, status, callerNumber },
+          "Rainbow telephony call event"
+        );
+
+        if (status === "ringing" || status === "queued") {
+          await this.handleRinging(tenantId, { callId, callerNumber, from: callerNumber });
+        } else if (status === "active" || status === "answered") {
+          await this.handleStatusChange(tenantId, { callId }, "ACTIVE");
+        } else if (status === "released" || status === "cleared") {
+          await this.handleStatusChange(tenantId, { callId }, "COMPLETED");
+        }
+      }
+    }
+
+    // Also check legs for call state
+    if (legs && legs.length > 0) {
+      for (const leg of legs) {
+        const callId = (leg.callId as string) ?? (leg.id as string) ?? "unknown";
+        const state = (leg.state as string) ?? "";
+        const callerNumber = (leg.callingPartyNumber as string) ??
+          (leg.remotePartyNumber as string) ?? "";
+
+        logger.info(
+          { tenantId, callId, state, callerNumber },
+          "Rainbow telephony leg event"
+        );
+
+        if (state === "ringing" || state === "queued") {
+          await this.handleRinging(tenantId, { callId, callerNumber, from: callerNumber });
+        } else if (state === "active" || state === "answered" || state === "connected") {
+          await this.handleStatusChange(tenantId, { callId }, "ACTIVE");
+        } else if (state === "released" || state === "cleared" || state === "disconnected") {
+          await this.handleStatusChange(tenantId, { callId }, "COMPLETED");
+        }
+      }
+    }
   }
 
   /** Resolve a caller by phone number from the local contacts DB */
