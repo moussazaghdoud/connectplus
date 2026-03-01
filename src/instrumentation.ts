@@ -25,4 +25,12 @@ export async function register() {
   } catch (err) {
     console.error("[ConnectPlus] SSE/Inbound handler initialization failed:", err);
   }
+
+  // Start Rainbow S2S connector (registers webhook callback with Rainbow)
+  try {
+    const { rainbowS2SConnector } = await import("@/lib/rainbow/s2s-connector");
+    await rainbowS2SConnector.start();
+  } catch (err) {
+    console.error("[ConnectPlus] Rainbow S2S connector initialization failed:", err);
+  }
 }
