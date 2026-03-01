@@ -27,11 +27,10 @@ export async function register() {
   }
 
   // Start Rainbow S2S connector (registers webhook callback with Rainbow)
+  // Fire-and-forget: don't await — Next.js may not fully await register()
   console.log("[ConnectPlus] Starting Rainbow S2S connector...");
-  try {
-    const { rainbowS2SConnector } = await import("@/lib/rainbow/s2s-connector");
-    await rainbowS2SConnector.start();
-  } catch (err) {
-    console.error("[ConnectPlus] Rainbow S2S connector initialization failed:", err);
-  }
+  import("@/lib/rainbow/s2s-connector")
+    .then(({ rainbowS2SConnector }) => rainbowS2SConnector.start())
+    .then(() => console.log("[ConnectPlus] Rainbow S2S connector started"))
+    .catch((err) => console.error("[ConnectPlus] Rainbow S2S connector failed:", err));
 }
