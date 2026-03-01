@@ -18,6 +18,9 @@ COPY . .
 RUN npx prisma generate
 
 # Build Next.js (standalone output)
+# Dummy DATABASE_URL satisfies import-time checks during build.
+# The real value is injected at runtime by Railway.
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 RUN npm run build
 
 # ─── Stage 3: Production ─────────────────────────────────
