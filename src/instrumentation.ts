@@ -27,6 +27,7 @@ export async function register() {
   }
 
   // Start Rainbow S2S connector (registers webhook callback with Rainbow)
+  console.log("[ConnectPlus] Starting Rainbow S2S connector...");
   try {
     const { rainbowS2SConnector } = await import("@/lib/rainbow/s2s-connector");
     await rainbowS2SConnector.start();

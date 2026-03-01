@@ -45,7 +45,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.mjs ./prisma.config.mjs
 COPY --from=builder /app/src/generated ./src/generated
 
-# Copy node_modules for Prisma runtime
+# Copy node_modules for Prisma runtime + external packages (rainbow-node-sdk)
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy startup script
