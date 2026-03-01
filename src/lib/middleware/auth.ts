@@ -13,10 +13,12 @@ const API_KEY_HEADER = "x-api-key";
 export async function authenticateRequest(
   request: NextRequest
 ): Promise<TenantContext> {
-  const apiKey = request.headers.get(API_KEY_HEADER);
+  const url = new URL(request.url);
+  const apiKey =
+    request.headers.get(API_KEY_HEADER) ?? url.searchParams.get("key");
 
   if (!apiKey) {
-    throw new AuthenticationError("Missing X-API-Key header");
+    throw new AuthenticationError("Missing API key");
   }
 
   // Hash the provided key and compare against stored hash
