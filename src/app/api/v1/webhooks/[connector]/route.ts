@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from "next/server";
 import { apiHandler } from "@/lib/middleware/api-handler";
 import { connectorRegistry, eventBus } from "@/lib/core";
