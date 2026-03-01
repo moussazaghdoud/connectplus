@@ -100,6 +100,25 @@ function handleCallEvent(call) {
   });
 }
 
+// ── Dummy Express engine ─────────────────────────────────
+// The SDK tries to create a local Express server for S2S callbacks,
+// but we handle callbacks via our own Next.js route. Passing a no-op
+// Express app avoids the path-to-regexp v8 incompatibility in Express 4.x.
+function createNoopExpress() {
+  const noop = () => noop;
+  const app = function () {};
+  app.use = noop;
+  app.get = noop;
+  app.post = noop;
+  app.put = noop;
+  app.delete = noop;
+  app.all = noop;
+  app.listen = (port, cb) => { if (cb) cb(); return { close: noop }; };
+  app.set = noop;
+  app.engine = noop;
+  return app;
+}
+
 // ── Start SDK ────────────────────────────────────────────
 async function start() {
   console.log(`${LOG} Starting Rainbow SDK in S2S mode...`);
@@ -112,6 +131,7 @@ async function start() {
     s2s: {
       hostCallback: HOST_CALLBACK,
       locallistenningport: "0",
+      expressEngine: createNoopExpress(),
     },
     credentials: { login: LOGIN, password: PASSWORD },
     application: { appID: APP_ID, appSecret: APP_SECRET },
