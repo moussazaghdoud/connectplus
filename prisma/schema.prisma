@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── TENANT ─────────────────────────────────────────────
+model Tenant {
+  id         String       @id @default(cuid())
+  name       String
+  slug       String       @unique
+  apiKey     String       @unique // SHA-256 hashed
+  apiKeyHint String // last 4 chars for UI display
+  status     TenantStatus @default(ACTIVE)
+
+  // Rainbow credentials (AES-256-GCM encrypted)
+  rainbowLogin    String?
+  rainbowPassword String? // encrypted
+  rainbowAppId    String?
+  rainbowAppSecret String? // encrypted
+  rainbowHost     String  @default("sandbox")
+
+  connectorConfigs ConnectorConfig[]
+  interactions     Interaction[]
+  auditLogs        AuditLog[]
+  contacts         Contact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([apiKey])
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+// ─── CONNECTOR CONFIG (per-tenant, per-connector) ───────
+model ConnectorConfig {
+  id          String  @id @default(cuid())
+  tenantId    String
+  connectorId String // e.g. "hubspot"
+  enabled     Boolean @default(true)
+
+  // Encrypted credentials blob (JSON, AES-256-GCM)
+  credentials String
+  settings    Json   @default("{}")
+
+  // OAuth state (CSRF token for OAuth flow)
+  oauthState String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, connectorId])
+  @@index([tenantId])
+}
+
+// ─── CONTACT (canonical, cached from external systems) ──
+model Contact {
+  id          String  @id @default(cuid())
+  tenantId    String
+  displayName String
+  email       String?
+  phone       String?
+  company     String?
+  title       String?
+  avatarUrl   String?
+  metadata    Json    @default("{}")
+
+  externalLinks ExternalLink[]
+  interactions  Interaction[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, email])
+  @@index([tenantId, phone])
+}
+
+// ─── EXTERNAL LINK (contact ↔ external system mapping) ──
+model ExternalLink {
+  id          String  @id @default(cuid())
+  contactId   String
+  source      String // connector ID: "hubspot", "salesforce"
+  externalId  String // ID in external system
+  externalUrl String? // deeplink back to external system
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([contactId, source])
+  @@index([source, externalId])
+}
+
+// ─── INTERACTION (call/communication record) ─────────────
+model Interaction {
+  id             String            @id @default(cuid())
+  tenantId       String
+  contactId      String?
+  idempotencyKey String            @unique
+  type           InteractionType
+  status         InteractionStatus @default(PENDING)
+  direction      Direction         @default(OUTBOUND)
+
+  // Rainbow side
+  rainbowCallId String?
+  rainbowConfId String?
+  joinUrl       String? // for video conferences
+
+  // Source
+  connectorId String? // which connector triggered this
+  externalId  String? // reference in external system
+
+  // Target
+  targetPhone String? // for PSTN calls
+  targetEmail String? // for contact resolution
+
+  // Outcome
+  startedAt     DateTime?
+  endedAt       DateTime?
+  durationSecs  Int?
+  failureReason String?
+
+  writebackStatus WritebackStatus @default(PENDING)
+  metadata        Json            @default("{}")
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, connectorId])
+  @@index([rainbowCallId])
+}
+
+enum InteractionType {
+  AUDIO_CALL
+  VIDEO_CALL
+  PHONE_CALL // PSTN
+}
+
+enum InteractionStatus {
+  PENDING
+  INITIATING
+  RINGING
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum WritebackStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+// ─── AUDIT LOG (immutable) ───────────────────────────────
+model AuditLog {
+  id            String @id @default(cuid())
+  tenantId      String
+  correlationId String
+  actor         String // "system", "api_key:xxxx", "webhook:hubspot"
+  action        String // "interaction.created", "connector.configured"
+  resource      String // "interaction:cuid123"
+  detail        Json   @default("{}")
+  ip            String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([correlationId])
+}
+
+// ─── DEAD LETTER QUEUE ───────────────────────────────────
+model DeadLetterEntry {
+  id          String    @id @default(cuid())
+  tenantId    String
+  source      String // "webhook:hubspot", "writeback:hubspot"
+  payload     Json
+  error       String
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  nextRetryAt DateTime?
+  resolvedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, resolvedAt])
+  @@index([nextRetryAt])
+}
+
+// ─── IDEMPOTENCY STORE ───────────────────────────────────
+model IdempotencyRecord {
+  key       String   @id
+  tenantId  String
+  response  Json
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}

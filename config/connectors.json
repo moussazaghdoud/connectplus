@@ -1,0 +1,158 @@
+{
+  "$schema": "./connectors-schema.json",
+  "connectors": [
+    {
+      "id": "hubspot",
+      "name": "HubSpot",
+      "description": "HubSpot CRM — contacts, deals, and call activity logging",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "exemplar",
+      "docsUrl": "https://developers.hubspot.com/docs/api"
+    },
+    {
+      "id": "salesforce",
+      "name": "Salesforce",
+      "description": "Salesforce CRM — contacts, leads, and call activity logging",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "intercom",
+      "name": "Intercom",
+      "description": "Intercom — customer messaging and support",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "zendesk",
+      "name": "Zendesk",
+      "description": "Zendesk Support — tickets and customer communication",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "description": "Slack — team messaging with click-to-call",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "freshdesk",
+      "name": "Freshdesk",
+      "description": "Freshdesk — customer support with call integration",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "pipedrive",
+      "name": "Pipedrive",
+      "description": "Pipedrive CRM — deals, contacts, and call logging",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "microsoft-dynamics",
+      "name": "Microsoft Dynamics 365",
+      "description": "Dynamics 365 — enterprise CRM with telephony integration",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "shopify",
+      "name": "Shopify",
+      "description": "Shopify — e-commerce customer support calls",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "monday",
+      "name": "monday.com",
+      "description": "monday.com — work management with click-to-call",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "zapier",
+      "name": "Zapier",
+      "description": "Zapier — workflow automation trigger for Rainbow calls",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "front",
+      "name": "Front",
+      "description": "Front — shared inbox with call integration",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "kustomer",
+      "name": "Kustomer",
+      "description": "Kustomer — customer service platform with call logging",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "gorgias",
+      "name": "Gorgias",
+      "description": "Gorgias — e-commerce helpdesk with call integration",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "helpscout",
+      "name": "Help Scout",
+      "description": "Help Scout — customer support with click-to-call",
+      "authType": "oauth2",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "copper",
+      "name": "Copper",
+      "description": "Copper CRM — Google Workspace CRM with call logging",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "nocrm",
+      "name": "noCRM.io",
+      "description": "noCRM.io — lead management with call tracking",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "reamaze",
+      "name": "Re:amaze",
+      "description": "Re:amaze — customer messaging with call support",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    },
+    {
+      "id": "happyfox",
+      "name": "HappyFox",
+      "description": "HappyFox — helpdesk with call integration",
+      "authType": "api_key",
+      "webhookSupported": true,
+      "status": "planned"
+    }
+  ]
+}
