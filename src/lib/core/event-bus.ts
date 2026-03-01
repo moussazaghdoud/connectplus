@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import type { ConnectorEvent, HealthStatus } from "./connector-interface";
 import type { InteractionStatus } from "./models/interaction";
+import type { ScreenPopData } from "../sse/types";
 import { logger } from "../observability/logger";
 
 // ─── Event type map ──────────────────────────────────────
@@ -24,7 +25,14 @@ export interface FrameworkEvents {
     event: ConnectorEvent;
   };
   "connector.health": { connectorId: string; status: HealthStatus };
-  "rainbow.callback": { eventType: string; payload: unknown };
+  "rainbow.callback": { eventType: string; tenantId: string; payload: unknown };
+  "screen.pop": { tenantId: string; data: ScreenPopData };
+  "call.status_changed": {
+    tenantId: string;
+    interactionId: string;
+    status: string;
+    rainbowCallId?: string;
+  };
 }
 
 type EventName = keyof FrameworkEvents;
@@ -62,5 +70,13 @@ class FrameworkEventBus {
   }
 }
 
-/** Singleton event bus */
-export const eventBus = new FrameworkEventBus();
+/** Singleton event bus — stored on globalThis to survive Next.js module re-bundling */
+const globalForEventBus = globalThis as unknown as {
+  frameworkEventBus: FrameworkEventBus | undefined;
+};
+
+if (!globalForEventBus.frameworkEventBus) {
+  globalForEventBus.frameworkEventBus = new FrameworkEventBus();
+}
+
+export const eventBus = globalForEventBus.frameworkEventBus;

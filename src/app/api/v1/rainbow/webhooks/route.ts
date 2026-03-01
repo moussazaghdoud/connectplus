@@ -17,22 +17,27 @@ export const POST = apiHandler(
     const body = await request.json();
     const eventType = body?.eventType ?? body?.type ?? "unknown";
 
+    // Extract tenant from query string: ?tenant=<tenantId>
+    const url = new URL(request.url);
+    const tenantId = url.searchParams.get("tenant") ?? ctx.tenant.tenantId;
+
     logger.info(
-      { eventType, callId: body?.callId },
+      { eventType, callId: body?.callId, tenantId },
       "Rainbow S2S callback received"
     );
 
     metrics.increment("rainbow_callback", { eventType });
 
-    // Emit to event bus for processing
+    // Emit to event bus for processing (with tenantId for inbound routing)
     eventBus.emit("rainbow.callback", {
       eventType,
+      tenantId,
       payload: body,
     });
 
     // Audit log
     await writeAuditLog({
-      tenantId: ctx.tenant.tenantId,
+      tenantId,
       correlationId: ctx.correlationId,
       actor: "rainbow:s2s",
       action: `rainbow.${eventType}`,

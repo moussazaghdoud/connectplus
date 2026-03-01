@@ -46,6 +46,39 @@ export class InteractionManager {
     return interaction;
   }
 
+  /** Create an inbound interaction (incoming call) */
+  async createInbound(input: {
+    tenantId: string;
+    type: "AUDIO_CALL" | "VIDEO_CALL" | "PHONE_CALL";
+    callerPhone?: string;
+    contactId?: string;
+    rainbowCallId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const key = uuidv4();
+
+    const interaction = await prisma.interaction.create({
+      data: {
+        tenantId: input.tenantId,
+        idempotencyKey: key,
+        type: input.type,
+        status: "RINGING",
+        direction: "INBOUND",
+        contactId: input.contactId,
+        targetPhone: input.callerPhone,
+        rainbowCallId: input.rainbowCallId,
+        metadata: (input.metadata ?? {}) as Record<string, string>,
+      },
+    });
+
+    eventBus.emit("interaction.created", {
+      interactionId: interaction.id,
+      tenantId: input.tenantId,
+    });
+
+    return interaction;
+  }
+
   /** Get interaction by ID (tenant-scoped) */
   async getById(interactionId: string) {
     const { tenantId } = getTenantContext();
