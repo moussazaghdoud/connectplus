@@ -48,7 +48,8 @@ COPY --from=builder /app/src/generated ./src/generated
 # Copy node_modules for Prisma runtime + external packages (rainbow-node-sdk)
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy startup script
+# Copy scripts and startup
+COPY --from=builder /app/scripts ./scripts
 COPY start.sh ./start.sh
 
 USER nextjs

@@ -14,5 +14,8 @@ ls -la node_modules/.prisma 2>&1 || echo ".prisma NOT FOUND"
 echo "=== Running Prisma Migrate ==="
 npx prisma migrate deploy 2>&1 || echo "WARNING: migrate failed, continuing..."
 
+echo "=== Starting Rainbow S2S Worker ==="
+node scripts/rainbow-s2s-worker.js &
+
 echo "=== Starting Next.js ==="
 exec node server.js

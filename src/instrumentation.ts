@@ -26,11 +26,6 @@ export async function register() {
     console.error("[ConnectPlus] SSE/Inbound handler initialization failed:", err);
   }
 
-  // Start Rainbow S2S connector (registers webhook callback with Rainbow)
-  // Fire-and-forget: don't await — Next.js may not fully await register()
-  console.log("[ConnectPlus] Starting Rainbow S2S connector...");
-  import("@/lib/rainbow/s2s-connector")
-    .then(({ rainbowS2SConnector }) => rainbowS2SConnector.start())
-    .then(() => console.log("[ConnectPlus] Rainbow S2S connector started"))
-    .catch((err) => console.error("[ConnectPlus] Rainbow S2S connector failed:", err));
+  // Rainbow S2S connector runs as a separate process (scripts/rainbow-s2s-worker.js)
+  // started by start.sh — keeps rainbow-node-sdk out of Next.js bundling.
 }
