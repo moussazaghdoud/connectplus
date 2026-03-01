@@ -70,8 +70,11 @@ class RainbowS2SConnector {
     );
 
     try {
-      // Dynamic import so the SDK is only loaded on the server
-      const RainbowSDK = (await import("rainbow-node-sdk")).default;
+      // Dynamic require — hidden from Turbopack/webpack static analysis
+      // so it doesn't try to bundle rainbow-node-sdk for Edge runtime
+      const sdkPath = "rainbow-node-sdk";
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const RainbowSDK = require(sdkPath).default ?? require(sdkPath);
 
       this.sdk = new RainbowSDK({
         rainbow: {
