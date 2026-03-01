@@ -70,11 +70,11 @@ class RainbowS2SConnector {
     );
 
     try {
-      // Dynamic require — hidden from Turbopack/webpack static analysis
+      // Use eval to completely hide from Turbopack/webpack static analysis
       // so it doesn't try to bundle rainbow-node-sdk for Edge runtime
-      const sdkPath = "rainbow-node-sdk";
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const RainbowSDK = require(sdkPath).default ?? require(sdkPath);
+      // eslint-disable-next-line no-eval
+      const mod = eval('require("rainbow-node-sdk")');
+      const RainbowSDK = mod.default ?? mod;
 
       this.sdk = new RainbowSDK({
         rainbow: {
