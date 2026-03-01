@@ -25,15 +25,13 @@ export async function GET() {
 
   const allHealthy = Object.values(checks).every((c) => c.status === "healthy");
 
-  return NextResponse.json(
-    {
-      status: allHealthy ? "healthy" : "degraded",
-      version: "0.1.0",
-      uptime: process.uptime(),
-      checks,
-      connectors: connectorRegistry.listIds(),
-      metrics: metrics.snapshot(),
-    },
-    { status: allHealthy ? 200 : 503 }
-  );
+  // Always return 200 for Railway healthcheck — report degraded in body
+  return NextResponse.json({
+    status: allHealthy ? "healthy" : "degraded",
+    version: "0.1.0",
+    uptime: process.uptime(),
+    checks,
+    connectors: connectorRegistry.listIds(),
+    metrics: metrics.snapshot(),
+  });
 }
