@@ -163,6 +163,23 @@ async function start() {
   // Event listeners
   sdk.events.on("rainbow_onready", () => {
     console.log(`${LOG} SDK ready — callback registered at ${HOST_CALLBACK}`);
+    // Log connected user info (including phone/extension)
+    const user = sdk.connectedUser;
+    if (user) {
+      console.log(`${LOG} Connected as: ${user.displayName || user.loginEmail || "unknown"}`);
+      console.log(`${LOG} User ID: ${user.id}`);
+      console.log(`${LOG} Email: ${user.loginEmail}`);
+      console.log(`${LOG} JID: ${user.jid_im}`);
+      if (user.phoneNumbers && user.phoneNumbers.length > 0) {
+        user.phoneNumbers.forEach((p) => {
+          console.log(`${LOG} Phone: ${p.number} (${p.type || "unknown"} / ${p.deviceType || ""})`);
+        });
+      } else {
+        console.log(`${LOG} No phone numbers found on this account`);
+      }
+      if (user.phonePbx) console.log(`${LOG} PBX phone: ${user.phonePbx}`);
+      if (user.phoneInternalNumber) console.log(`${LOG} Internal/Extension: ${user.phoneInternalNumber}`);
+    }
   });
 
   sdk.events.on("rainbow_onconnected", () => {
