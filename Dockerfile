@@ -48,6 +48,9 @@ COPY --from=builder /app/src/generated ./src/generated
 # Copy node_modules for Prisma runtime
 COPY --from=deps /app/node_modules ./node_modules
 
+# Copy startup script
+COPY start.sh ./start.sh
+
 USER nextjs
 
 EXPOSE 3000
