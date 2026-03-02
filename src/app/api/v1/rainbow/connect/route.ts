@@ -8,26 +8,24 @@ import { s2sManager } from "@/lib/rainbow/s2s-connector";
  * POST /api/v1/rainbow/connect — Start a Rainbow S2S session.
  *
  * The agent provides their Rainbow login + password via the UI.
- * Credentials are kept in memory only — never written to disk or DB.
+ * appId/appSecret/host come from server env vars (RAINBOW_APP_ID, etc.).
+ * Login credentials are kept in memory only — never written to disk or DB.
  *
- * Body: { login, password, appId, appSecret, host? }
+ * Body: { login, password }
  */
 export const POST = apiHandler(async (request: NextRequest, ctx) => {
   const body = await request.json();
-  const { login, password, appId, appSecret, host } = body as {
+  const { login, password } = body as {
     login?: string;
     password?: string;
-    appId?: string;
-    appSecret?: string;
-    host?: "sandbox" | "official";
   };
 
-  if (!login || !password || !appId || !appSecret) {
+  if (!login || !password) {
     return NextResponse.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message: "login, password, appId, and appSecret are required",
+          message: "login and password are required",
         },
       },
       { status: 400 }
@@ -37,9 +35,6 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
   const info = await s2sManager.connect(ctx.tenant.tenantId, {
     login,
     password,
-    appId,
-    appSecret,
-    host,
   });
 
   return NextResponse.json({ status: info.status, session: info });

@@ -9,13 +9,6 @@ import {
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 type RainbowStatus = "disconnected" | "connecting" | "connected" | "error";
 
-interface RainbowCreds {
-  login: string;
-  password: string;
-  appId: string;
-  appSecret: string;
-}
-
 export function ScreenPopProvider() {
   const [apiKey, setApiKey] = useState("");
   const [inputKey, setInputKey] = useState("");
@@ -28,25 +21,17 @@ export function ScreenPopProvider() {
   // Rainbow credentials (in-memory only — password never persisted)
   const [rbLogin, setRbLogin] = useState("");
   const [rbPassword, setRbPassword] = useState("");
-  const [rbAppId, setRbAppId] = useState("");
-  const [rbAppSecret, setRbAppSecret] = useState("");
   const [rbStatus, setRbStatus] = useState<RainbowStatus>("disconnected");
   const [rbError, setRbError] = useState("");
   const [rbConnectedAs, setRbConnectedAs] = useState("");
 
-  // Load saved API key + non-secret Rainbow fields from localStorage
+  // Load saved API key + Rainbow login from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("connectplus_api_key");
     if (saved) setInputKey(saved);
 
     const savedLogin = localStorage.getItem("connectplus_rb_login");
     if (savedLogin) setRbLogin(savedLogin);
-
-    const savedAppId = localStorage.getItem("connectplus_rb_app_id");
-    if (savedAppId) setRbAppId(savedAppId);
-
-    const savedAppSecret = localStorage.getItem("connectplus_rb_app_secret");
-    if (savedAppSecret) setRbAppSecret(savedAppSecret);
   }, []);
 
   // ── SSE connection ──────────────────────────────────────
@@ -165,10 +150,8 @@ export function ScreenPopProvider() {
     setRbStatus("connecting");
     setRbError("");
 
-    // Persist non-secret fields for convenience
+    // Persist login for convenience (password never saved)
     localStorage.setItem("connectplus_rb_login", rbLogin);
-    localStorage.setItem("connectplus_rb_app_id", rbAppId);
-    localStorage.setItem("connectplus_rb_app_secret", rbAppSecret);
 
     try {
       const resp = await fetch("/api/v1/rainbow/connect", {
@@ -180,8 +163,6 @@ export function ScreenPopProvider() {
         body: JSON.stringify({
           login: rbLogin,
           password: rbPassword,
-          appId: rbAppId,
-          appSecret: rbAppSecret,
         }),
       });
 
@@ -204,7 +185,7 @@ export function ScreenPopProvider() {
       setRbStatus("error");
       setRbError(err instanceof Error ? err.message : "Network error");
     }
-  }, [apiKey, rbLogin, rbPassword, rbAppId, rbAppSecret]);
+  }, [apiKey, rbLogin, rbPassword]);
 
   const disconnectRainbow = useCallback(async () => {
     if (!apiKey) return;
@@ -277,9 +258,7 @@ export function ScreenPopProvider() {
     status === "connected" &&
     rbStatus !== "connected" &&
     rbLogin.trim() &&
-    rbPassword.trim() &&
-    rbAppId.trim() &&
-    rbAppSecret.trim();
+    rbPassword.trim();
 
   const statusIndicator = {
     disconnected: { color: "bg-gray-400", text: "Disconnected" },
@@ -349,7 +328,7 @@ export function ScreenPopProvider() {
 
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Login (email)</label>
+              <label className="block text-xs text-gray-500 mb-1">Rainbow Login (email)</label>
               <input
                 type="email"
                 value={rbLogin}
@@ -362,7 +341,7 @@ export function ScreenPopProvider() {
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Password</label>
+              <label className="block text-xs text-gray-500 mb-1">Rainbow Password</label>
               <input
                 type="password"
                 value={rbPassword}
@@ -370,32 +349,6 @@ export function ScreenPopProvider() {
                 placeholder="••••••••"
                 disabled={rbStatus === "connected"}
                 className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm
-                           focus:outline-none focus:ring-2 focus:ring-blue-500
-                           disabled:bg-gray-100 disabled:text-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">App ID</label>
-              <input
-                type="text"
-                value={rbAppId}
-                onChange={(e) => setRbAppId(e.target.value)}
-                placeholder="xxxxxxxx..."
-                disabled={rbStatus === "connected"}
-                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-mono
-                           focus:outline-none focus:ring-2 focus:ring-blue-500
-                           disabled:bg-gray-100 disabled:text-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">App Secret</label>
-              <input
-                type="password"
-                value={rbAppSecret}
-                onChange={(e) => setRbAppSecret(e.target.value)}
-                placeholder="••••••••"
-                disabled={rbStatus === "connected"}
-                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-mono
                            focus:outline-none focus:ring-2 focus:ring-blue-500
                            disabled:bg-gray-100 disabled:text-gray-500"
               />

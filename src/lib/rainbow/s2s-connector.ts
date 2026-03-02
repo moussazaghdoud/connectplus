@@ -24,9 +24,6 @@ const LOG_PREFIX = "[RainbowS2S]";
 export interface RainbowConnectParams {
   login: string;
   password: string;
-  appId: string;
-  appSecret: string;
-  host?: "sandbox" | "official";
 }
 
 export type RainbowSessionStatus =
@@ -185,17 +182,23 @@ class S2SConnectionManager {
 
   /**
    * Connect a tenant to Rainbow.
-   * Credentials are used to start the SDK, then only kept in memory
-   * inside the SDK instance. We don't store them separately.
+   * Login/password come from the user; appId/appSecret/host from env vars.
    */
   async connect(
     tenantId: string,
     params: RainbowConnectParams
   ): Promise<RainbowSessionInfo> {
+    const appId = process.env.RAINBOW_APP_ID;
+    const appSecret = process.env.RAINBOW_APP_SECRET;
+    const host = process.env.RAINBOW_HOST || "official";
+
+    if (!appId || !appSecret) {
+      return { status: "error", error: "Server missing RAINBOW_APP_ID / RAINBOW_APP_SECRET" };
+    }
+
     // Stop existing session if any
     await this.disconnect(tenantId);
 
-    const host = params.host || "official";
     const hostCallback = this.hostCallback;
 
     console.log(
@@ -221,7 +224,7 @@ class S2SConnectionManager {
           expressEngine: createNoopExpress(),
         },
         credentials: { login: params.login, password: params.password },
-        application: { appID: params.appId, appSecret: params.appSecret },
+        application: { appID: appId, appSecret },
         logs: {
           enableConsoleLogs: false,
           enableFileLogs: false,
