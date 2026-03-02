@@ -20,9 +20,9 @@
 
 import { logger } from "../observability/logger";
 
-// Dynamic requires to prevent Turbopack from analyzing these at build time
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const childProcess = require("child_process") as typeof import("child_process");
+// Use eval("require") to completely hide from Turbopack static analysis
+// eslint-disable-next-line no-eval
+const _require = eval("require") as NodeRequire;
 type ChildProcess = import("child_process").ChildProcess;
 
 const LOG_PREFIX = "[RainbowS2S]";
@@ -92,7 +92,8 @@ class S2SConnectionManager {
     // Build path at runtime (string concat defeats Turbopack static analysis)
     const workerPath = process.cwd() + "/scripts/rainbow-s2s-worker.js";
 
-    const child = childProcess.spawn("node", [workerPath], {
+    const { spawn } = _require("child_process") as typeof import("child_process");
+    const child = spawn("node", [workerPath], {
       env: {
         ...process.env,
         RAINBOW_APP_ID: appId,
