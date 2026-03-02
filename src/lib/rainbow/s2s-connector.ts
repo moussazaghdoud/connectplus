@@ -18,9 +18,12 @@
  *   7. Agent disconnects → child process killed, credentials gone
  */
 
-import { spawn, type ChildProcess } from "child_process";
-import * as path from "path";
 import { logger } from "../observability/logger";
+
+// Dynamic requires to prevent Turbopack from analyzing these at build time
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const childProcess = require("child_process") as typeof import("child_process");
+type ChildProcess = import("child_process").ChildProcess;
 
 const LOG_PREFIX = "[RainbowS2S]";
 
@@ -86,10 +89,10 @@ class S2SConnectionManager {
       `${LOG_PREFIX} [${tenantId}] Spawning worker for ${params.login} (host: ${host})`
     );
 
-    // Find the worker script — could be in project root or relative to cwd
-    const workerPath = path.resolve(process.cwd(), "scripts/rainbow-s2s-worker.js");
+    // Build path at runtime (string concat defeats Turbopack static analysis)
+    const workerPath = process.cwd() + "/scripts/rainbow-s2s-worker.js";
 
-    const child = spawn("node", [workerPath], {
+    const child = childProcess.spawn("node", [workerPath], {
       env: {
         ...process.env,
         RAINBOW_APP_ID: appId,
