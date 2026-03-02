@@ -26,6 +26,7 @@ export async function register() {
     console.error("[ConnectPlus] SSE/Inbound handler initialization failed:", err);
   }
 
-  // Rainbow S2S connector runs as a separate process (scripts/rainbow-s2s-worker.js)
-  // started by start.sh — keeps rainbow-node-sdk out of Next.js bundling.
+  // Rainbow S2S sessions are user-initiated from the /agent page.
+  // Each agent provides their own Rainbow login/password — credentials
+  // stay in memory only, never persisted. See s2s-connector.ts.
 }

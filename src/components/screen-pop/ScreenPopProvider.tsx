@@ -7,6 +7,14 @@ import {
 } from "./CallNotification";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
+type RainbowStatus = "disconnected" | "connecting" | "connected" | "error";
+
+interface RainbowCreds {
+  login: string;
+  password: string;
+  appId: string;
+  appSecret: string;
+}
 
 export function ScreenPopProvider() {
   const [apiKey, setApiKey] = useState("");
@@ -17,13 +25,31 @@ export function ScreenPopProvider() {
   );
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Load saved API key from localStorage
+  // Rainbow credentials (in-memory only — password never persisted)
+  const [rbLogin, setRbLogin] = useState("");
+  const [rbPassword, setRbPassword] = useState("");
+  const [rbAppId, setRbAppId] = useState("");
+  const [rbAppSecret, setRbAppSecret] = useState("");
+  const [rbStatus, setRbStatus] = useState<RainbowStatus>("disconnected");
+  const [rbError, setRbError] = useState("");
+  const [rbConnectedAs, setRbConnectedAs] = useState("");
+
+  // Load saved API key + non-secret Rainbow fields from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("connectplus_api_key");
-    if (saved) {
-      setInputKey(saved);
-    }
+    if (saved) setInputKey(saved);
+
+    const savedLogin = localStorage.getItem("connectplus_rb_login");
+    if (savedLogin) setRbLogin(savedLogin);
+
+    const savedAppId = localStorage.getItem("connectplus_rb_app_id");
+    if (savedAppId) setRbAppId(savedAppId);
+
+    const savedAppSecret = localStorage.getItem("connectplus_rb_app_secret");
+    if (savedAppSecret) setRbAppSecret(savedAppSecret);
   }, []);
+
+  // ── SSE connection ──────────────────────────────────────
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
@@ -77,7 +103,6 @@ export function ScreenPopProvider() {
           const callId = data.interactionId || data.callId || data.rainbowCallId;
           setCalls((prev) => {
             const next = new Map(prev);
-            // Try to find by callId, or by rainbowCallId match
             const existing = next.get(callId) ||
               (data.rainbowCallId ? Array.from(next.values()).find(c => c.callId === data.rainbowCallId) : undefined);
             if (existing) {
@@ -85,7 +110,7 @@ export function ScreenPopProvider() {
               const newStatus = data.status === "ACTIVE" || data.state === "ACTIVE" ? "ACTIVE" : existing.status;
               next.set(key, {
                 ...existing,
-                callId: callId || key, // Update to real interaction ID if available
+                callId: callId || key,
                 status: newStatus,
                 startedAt: newStatus === "ACTIVE" && existing.status !== "ACTIVE" ? Date.now() : existing.startedAt,
               });
@@ -118,7 +143,6 @@ export function ScreenPopProvider() {
         if (es.readyState === EventSource.CLOSED) {
           setStatus("error");
         } else {
-          // Reconnecting
           setStatus("connecting");
         }
       };
@@ -126,12 +150,97 @@ export function ScreenPopProvider() {
     [disconnect]
   );
 
-  // Cleanup on unmount
+  // Cleanup on unmount — disconnect both SSE and Rainbow
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close();
     };
   }, []);
+
+  // ── Rainbow S2S connection ──────────────────────────────
+
+  const connectRainbow = useCallback(async () => {
+    if (!apiKey) return;
+
+    setRbStatus("connecting");
+    setRbError("");
+
+    // Persist non-secret fields for convenience
+    localStorage.setItem("connectplus_rb_login", rbLogin);
+    localStorage.setItem("connectplus_rb_app_id", rbAppId);
+    localStorage.setItem("connectplus_rb_app_secret", rbAppSecret);
+
+    try {
+      const resp = await fetch("/api/v1/rainbow/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          login: rbLogin,
+          password: rbPassword,
+          appId: rbAppId,
+          appSecret: rbAppSecret,
+        }),
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        setRbStatus("error");
+        setRbError(data.error?.message || `HTTP ${resp.status}`);
+        return;
+      }
+
+      if (data.session?.status === "error") {
+        setRbStatus("error");
+        setRbError(data.session.error || "Connection failed");
+      } else {
+        setRbStatus("connected");
+        setRbConnectedAs(data.session?.connectedAs || rbLogin);
+      }
+    } catch (err) {
+      setRbStatus("error");
+      setRbError(err instanceof Error ? err.message : "Network error");
+    }
+  }, [apiKey, rbLogin, rbPassword, rbAppId, rbAppSecret]);
+
+  const disconnectRainbow = useCallback(async () => {
+    if (!apiKey) return;
+
+    try {
+      await fetch("/api/v1/rainbow/connect", {
+        method: "DELETE",
+        headers: { "x-api-key": apiKey },
+      });
+    } catch {
+      // Ignore errors on disconnect
+    }
+
+    setRbStatus("disconnected");
+    setRbConnectedAs("");
+    setRbError("");
+  }, [apiKey]);
+
+  // Check Rainbow status when SSE connects
+  useEffect(() => {
+    if (status !== "connected" || !apiKey) return;
+
+    fetch("/api/v1/rainbow/connect", {
+      headers: { "x-api-key": apiKey },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.session?.status === "connected") {
+          setRbStatus("connected");
+          setRbConnectedAs(data.session.connectedAs || "");
+        }
+      })
+      .catch(() => {});
+  }, [status, apiKey]);
+
+  // ── Handlers ────────────────────────────────────────────
 
   const handleDismiss = useCallback((callId: string) => {
     setCalls((prev) => {
@@ -144,14 +253,33 @@ export function ScreenPopProvider() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (status === "connected" || status === "connecting") {
+      disconnectRainbow();
       disconnect();
     } else {
       connect(inputKey);
     }
   };
 
+  const handleRainbowSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (rbStatus === "connected") {
+      disconnectRainbow();
+    } else {
+      connectRainbow();
+    }
+  };
+
   const isConnected = status === "connected" || status === "connecting";
   const callList = Array.from(calls.values());
+
+  const sseCanConnect = !isConnected && inputKey.trim();
+  const rbCanConnect =
+    status === "connected" &&
+    rbStatus !== "connected" &&
+    rbLogin.trim() &&
+    rbPassword.trim() &&
+    rbAppId.trim() &&
+    rbAppSecret.trim();
 
   const statusIndicator = {
     disconnected: { color: "bg-gray-400", text: "Disconnected" },
@@ -162,13 +290,22 @@ export function ScreenPopProvider() {
 
   const si = statusIndicator[status];
 
+  const rbStatusIndicator = {
+    disconnected: { color: "bg-gray-400", text: "Not connected" },
+    connecting: { color: "bg-yellow-400 animate-pulse", text: "Connecting…" },
+    connected: { color: "bg-green-500", text: rbConnectedAs ? `Connected as ${rbConnectedAs}` : "Connected" },
+    error: { color: "bg-red-500", text: rbError || "Error" },
+  };
+
+  const rbSi = rbStatusIndicator[rbStatus];
+
   return (
     <div className="max-w-xl mx-auto px-4 py-8">
       {/* Header */}
       <h1 className="text-2xl font-bold mb-6">ConnectPlus Agent</h1>
 
-      {/* API Key Form */}
-      <form onSubmit={handleSubmit} className="mb-4">
+      {/* Step 1: API Key */}
+      <form onSubmit={handleSubmit} className="mb-6">
         <label className="block text-sm font-medium text-gray-600 mb-1">
           API Key
         </label>
@@ -197,24 +334,118 @@ export function ScreenPopProvider() {
             {isConnected ? "Disconnect" : "Connect"}
           </button>
         </div>
+        <div className="flex items-center gap-2 mt-2">
+          <span className={`w-2 h-2 rounded-full ${si.color}`} />
+          <span className="text-xs text-gray-500">{si.text}</span>
+        </div>
       </form>
 
-      {/* Status */}
-      <div className="flex items-center gap-2 mb-8">
-        <span className={`w-2.5 h-2.5 rounded-full ${si.color}`} />
-        <span className="text-sm text-gray-600">
-          Status: <span className="font-medium">{si.text}</span>
-        </span>
-      </div>
+      {/* Step 2: Rainbow credentials (only shown when SSE is connected) */}
+      {status === "connected" && (
+        <form onSubmit={handleRainbowSubmit} className="mb-6 p-4 rounded-lg border border-gray-200 bg-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">
+            Rainbow Telephony
+          </h2>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Login (email)</label>
+              <input
+                type="email"
+                value={rbLogin}
+                onChange={(e) => setRbLogin(e.target.value)}
+                placeholder="user@company.com"
+                disabled={rbStatus === "connected"}
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-blue-500
+                           disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Password</label>
+              <input
+                type="password"
+                value={rbPassword}
+                onChange={(e) => setRbPassword(e.target.value)}
+                placeholder="••••••••"
+                disabled={rbStatus === "connected"}
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-blue-500
+                           disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">App ID</label>
+              <input
+                type="text"
+                value={rbAppId}
+                onChange={(e) => setRbAppId(e.target.value)}
+                placeholder="xxxxxxxx..."
+                disabled={rbStatus === "connected"}
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-mono
+                           focus:outline-none focus:ring-2 focus:ring-blue-500
+                           disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">App Secret</label>
+              <input
+                type="password"
+                value={rbAppSecret}
+                onChange={(e) => setRbAppSecret(e.target.value)}
+                placeholder="••••••••"
+                disabled={rbStatus === "connected"}
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-mono
+                           focus:outline-none focus:ring-2 focus:ring-blue-500
+                           disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${rbSi.color}`} />
+              <span className="text-xs text-gray-500">{rbSi.text}</span>
+            </div>
+            <button
+              type="submit"
+              disabled={rbStatus === "connecting" || (!rbCanConnect && rbStatus !== "connected")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium text-white transition-colors
+                ${
+                  rbStatus === "connected"
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-purple-600 hover:bg-purple-700"
+                }
+                disabled:opacity-50`}
+            >
+              {rbStatus === "connected"
+                ? "Disconnect Rainbow"
+                : rbStatus === "connecting"
+                  ? "Connecting…"
+                  : "Connect Rainbow"}
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-400 mt-2">
+            Your password is sent to the server to authenticate with Rainbow but is never stored on disk.
+          </p>
+        </form>
+      )}
 
       {/* Empty state */}
-      {status === "connected" && callList.length === 0 && (
+      {status === "connected" && rbStatus === "connected" && callList.length === 0 && (
         <p className="text-gray-400 text-sm text-center mt-12">
           Waiting for incoming calls…
         </p>
       )}
 
-      {/* Notification stack (rendered via fixed positioning) */}
+      {status === "connected" && rbStatus !== "connected" && (
+        <p className="text-gray-400 text-sm text-center mt-12">
+          Enter your Rainbow credentials above to receive call notifications.
+        </p>
+      )}
+
+      {/* Notification stack */}
       {callList.map((call, i) => (
         <CallNotification
           key={call.callId}
