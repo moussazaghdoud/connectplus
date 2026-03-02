@@ -29,8 +29,10 @@ export const POST = apiHandler(
       ?? process.env.DEFAULT_TENANT_ID
       ?? ctx.tenant.tenantId;
 
+    console.log(`[Rainbow Webhook] ${eventType} | body: ${JSON.stringify(body).slice(0, 500)}`);
+
     logger.info(
-      { eventType, subPath, callId: body?.callId, tenantId, body: JSON.stringify(body).slice(0, 500) },
+      { eventType, subPath, callId: body?.callId, tenantId },
       "Rainbow S2S callback received"
     );
 
