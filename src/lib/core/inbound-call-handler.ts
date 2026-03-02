@@ -3,9 +3,13 @@ import { interactionManager } from "./interaction-manager";
 import { runWithTenant } from "./tenant-context";
 import { sseManager } from "../sse";
 import type { ScreenPopData } from "../sse/types";
-import { normalizePhone, phoneMatch } from "../utils/phone";
+import { normalizePhone } from "../utils/phone";
 import { prisma } from "../db";
 import { logger } from "../observability/logger";
+import {
+  resolveCallerByPhone,
+  buildCrmUrl,
+} from "./contact-resolver-utils";
 
 /**
  * Inbound Call Handler — listens to Rainbow S2S callbacks for incoming calls,
@@ -89,9 +93,9 @@ class InboundCallHandler {
     const normalized = normalizePhone(callerNumber);
 
     // Resolve caller from contacts DB (best-effort, non-blocking for screen pop)
-    let contact: Awaited<ReturnType<typeof this.resolveCallerByPhone>> = null;
+    let contact: Awaited<ReturnType<typeof resolveCallerByPhone>> = null;
     try {
-      contact = await this.resolveCallerByPhone(tenantId, normalized);
+      contact = await resolveCallerByPhone(tenantId, normalized);
     } catch (err) {
       logger.warn({ err, tenantId }, "Contact resolution failed, proceeding without contact");
     }
@@ -106,7 +110,7 @@ class InboundCallHandler {
             email: contact.email ?? undefined,
             company: contact.company ?? undefined,
             phone: contact.phone ?? undefined,
-            crmUrl: this.buildCrmUrl(contact),
+            crmUrl: buildCrmUrl(contact),
           }
         : null,
     };
@@ -291,41 +295,6 @@ class InboundCallHandler {
     }
   }
 
-  /** Resolve a caller by phone number from the local contacts DB */
-  private async resolveCallerByPhone(
-    tenantId: string,
-    normalizedPhone: string
-  ) {
-    if (!normalizedPhone) return null;
-
-    // Try exact match first
-    const exactMatch = await prisma.contact.findFirst({
-      where: { tenantId, phone: normalizedPhone },
-    });
-    if (exactMatch) return exactMatch;
-
-    // Fuzzy match: load contacts with phone numbers and compare trailing digits
-    const candidates = await prisma.contact.findMany({
-      where: { tenantId, phone: { not: null } },
-      take: 500,
-    });
-
-    for (const c of candidates) {
-      if (c.phone && phoneMatch(normalizedPhone, c.phone)) {
-        return c;
-      }
-    }
-
-    return null;
-  }
-
-  /** Build a CRM deep link from contact external links */
-  private buildCrmUrl(
-    contact: { id: string; metadata?: unknown }
-  ): string | undefined {
-    const meta = contact.metadata as Record<string, unknown> | null;
-    return (meta?.crmUrl as string) ?? undefined;
-  }
 }
 
 /** Singleton — stored on globalThis to survive Next.js module re-bundling */

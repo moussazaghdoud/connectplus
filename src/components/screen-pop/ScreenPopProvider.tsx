@@ -5,9 +5,12 @@ import {
   CallNotification,
   type CallNotificationData,
 } from "./CallNotification";
+import { SoftphoneControls } from "./SoftphoneControls";
+import { useRainbowWebSDK } from "@/hooks/useRainbowWebSDK";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 type RainbowStatus = "disconnected" | "connecting" | "connected" | "error";
+type RainbowMode = "s2s" | "webrtc";
 
 export function ScreenPopProvider() {
   const [apiKey, setApiKey] = useState("");
@@ -25,13 +28,22 @@ export function ScreenPopProvider() {
   const [rbError, setRbError] = useState("");
   const [rbConnectedAs, setRbConnectedAs] = useState("");
 
-  // Load saved API key + Rainbow login from localStorage
+  // Mode toggle: WebRTC (browser audio) vs S2S (notification only)
+  const [rbMode, setRbMode] = useState<RainbowMode>("s2s");
+
+  // WebRTC hook
+  const webrtc = useRainbowWebSDK(apiKey || null);
+
+  // Load saved preferences from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("connectplus_api_key");
     if (saved) setInputKey(saved);
 
     const savedLogin = localStorage.getItem("connectplus_rb_login");
     if (savedLogin) setRbLogin(savedLogin);
+
+    const savedMode = localStorage.getItem("connectplus_rb_mode");
+    if (savedMode === "webrtc" || savedMode === "s2s") setRbMode(savedMode);
   }, []);
 
   // ── SSE connection ──────────────────────────────────────
@@ -67,6 +79,13 @@ export function ScreenPopProvider() {
         try {
           const data = JSON.parse(e.data);
           const callId = data.interactionId || data.callId || "unknown";
+
+          // In WebRTC mode, skip SSE screen-pops if the hook already knows about this call
+          // (the browser SDK will handle it directly)
+          if (rbMode === "webrtc" && webrtc.currentCall?.callId === callId) {
+            return;
+          }
+
           const notification: CallNotificationData = {
             callId,
             callerNumber: data.callerNumber || data.caller || "Unknown",
@@ -133,17 +152,17 @@ export function ScreenPopProvider() {
         }
       };
     },
-    [disconnect]
+    [disconnect, rbMode, webrtc.currentCall?.callId]
   );
 
-  // Cleanup on unmount — disconnect both SSE and Rainbow
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close();
     };
   }, []);
 
-  // ── Rainbow S2S connection ──────────────────────────────
+  // ── Rainbow connection (S2S or WebRTC) ────────────────
 
   const connectRainbow = useCallback(async () => {
     if (!apiKey) return;
@@ -151,44 +170,100 @@ export function ScreenPopProvider() {
     setRbStatus("connecting");
     setRbError("");
 
-    // Persist login for convenience (password never saved)
+    // Persist login + mode for convenience (password never saved)
     localStorage.setItem("connectplus_rb_login", rbLogin);
+    localStorage.setItem("connectplus_rb_mode", rbMode);
 
     try {
-      const resp = await fetch("/api/v1/rainbow/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          login: rbLogin,
-          password: rbPassword,
-        }),
-      });
+      if (rbMode === "webrtc") {
+        // WebRTC mode: get SDK creds from server, then init + login in browser
+        const resp = await fetch("/api/v1/rainbow/connect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            login: rbLogin,
+            password: rbPassword,
+            mode: "webrtc",
+          }),
+        });
 
-      const data = await resp.json();
+        const data = await resp.json();
 
-      if (!resp.ok) {
-        setRbStatus("error");
-        setRbError(data.error?.message || `HTTP ${resp.status}`);
-        return;
-      }
+        if (!resp.ok) {
+          setRbStatus("error");
+          setRbError(data.error?.message || `HTTP ${resp.status}`);
+          return;
+        }
 
-      if (data.session?.status === "error") {
-        setRbStatus("error");
-        setRbError(data.session.error || "Connection failed");
+        if (!data.webrtc) {
+          setRbStatus("error");
+          setRbError("Server did not return WebRTC credentials");
+          return;
+        }
+
+        // Check if SDK is loaded
+        if (!window.rainbowSDK) {
+          setRbStatus("error");
+          setRbError("Rainbow Web SDK not loaded. Place rainbow-sdk.min.js in public/lib/");
+          return;
+        }
+
+        // Initialize and login via the Web SDK
+        await webrtc.initialize(data.webrtc.appId, data.webrtc.appSecret, data.webrtc.host);
+        await webrtc.login(rbLogin, rbPassword);
+
+        if (webrtc.error) {
+          setRbStatus("error");
+          setRbError(webrtc.error);
+        } else {
+          setRbStatus("connected");
+          setRbConnectedAs(rbLogin);
+        }
       } else {
-        setRbStatus("connected");
-        setRbConnectedAs(data.session?.connectedAs || rbLogin);
+        // S2S mode: start server-side worker
+        const resp = await fetch("/api/v1/rainbow/connect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            login: rbLogin,
+            password: rbPassword,
+          }),
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          setRbStatus("error");
+          setRbError(data.error?.message || `HTTP ${resp.status}`);
+          return;
+        }
+
+        if (data.session?.status === "error") {
+          setRbStatus("error");
+          setRbError(data.session.error || "Connection failed");
+        } else {
+          setRbStatus("connected");
+          setRbConnectedAs(data.session?.connectedAs || rbLogin);
+        }
       }
     } catch (err) {
       setRbStatus("error");
       setRbError(err instanceof Error ? err.message : "Network error");
     }
-  }, [apiKey, rbLogin, rbPassword]);
+  }, [apiKey, rbLogin, rbPassword, rbMode, webrtc]);
 
   const disconnectRainbow = useCallback(async () => {
+    // Logout from WebRTC if active
+    if (rbMode === "webrtc") {
+      await webrtc.logout();
+    }
+
     if (!apiKey) return;
 
     try {
@@ -203,7 +278,7 @@ export function ScreenPopProvider() {
     setRbStatus("disconnected");
     setRbConnectedAs("");
     setRbError("");
-  }, [apiKey]);
+  }, [apiKey, rbMode, webrtc]);
 
   // Check Rainbow status when SSE connects
   useEffect(() => {
@@ -221,6 +296,16 @@ export function ScreenPopProvider() {
       })
       .catch(() => {});
   }, [status, apiKey]);
+
+  // Sync WebRTC hook errors to UI
+  useEffect(() => {
+    if (webrtc.error && rbMode === "webrtc") {
+      setRbError(webrtc.error);
+      if (webrtc.status === "error") {
+        setRbStatus("error");
+      }
+    }
+  }, [webrtc.error, webrtc.status, rbMode]);
 
   // ── Handlers ────────────────────────────────────────────
 
@@ -251,10 +336,20 @@ export function ScreenPopProvider() {
     }
   };
 
+  const handleModeChange = (mode: RainbowMode) => {
+    if (rbStatus === "connected") return; // Can't switch while connected
+    setRbMode(mode);
+    localStorage.setItem("connectplus_rb_mode", mode);
+    // Proactively check mic permission when switching to WebRTC
+    if (mode === "webrtc") {
+      webrtc.checkMicPermission();
+    }
+  };
+
   const isConnected = status === "connected" || status === "connecting";
   const callList = Array.from(calls.values());
+  const isWebRTCActive = rbMode === "webrtc" && rbStatus === "connected";
 
-  const sseCanConnect = !isConnected && inputKey.trim();
   const rbCanConnect =
     status === "connected" &&
     rbStatus !== "connected" &&
@@ -327,6 +422,36 @@ export function ScreenPopProvider() {
             Rainbow Telephony
           </h2>
 
+          {/* Mode toggle */}
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => handleModeChange("webrtc")}
+              disabled={rbStatus === "connected"}
+              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                ${rbMode === "webrtc"
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }
+                disabled:opacity-70`}
+            >
+              WebRTC (Browser Audio)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange("s2s")}
+              disabled={rbStatus === "connected"}
+              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                ${rbMode === "s2s"
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }
+                disabled:opacity-70`}
+            >
+              Notification Only
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Rainbow Login (email)</label>
@@ -381,15 +506,36 @@ export function ScreenPopProvider() {
           </div>
 
           <p className="text-xs text-gray-400 mt-2">
-            Your password is sent to the server to authenticate with Rainbow but is never stored on disk.
+            {rbMode === "webrtc"
+              ? "WebRTC mode: your browser handles calls directly. Microphone access required."
+              : "Your password is sent to the server to authenticate with Rainbow but is never stored on disk."}
           </p>
+
+          {/* Mic permission indicator for WebRTC mode */}
+          {rbMode === "webrtc" && webrtc.micPermission !== "unknown" && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                webrtc.micPermission === "granted" ? "bg-green-500"
+                : webrtc.micPermission === "denied" ? "bg-red-500"
+                : "bg-yellow-400"
+              }`} />
+              <span className="text-xs text-gray-400">
+                {webrtc.micPermission === "granted" && "Microphone access granted"}
+                {webrtc.micPermission === "denied" && "Microphone blocked — check browser settings"}
+                {webrtc.micPermission === "prompt" && "Microphone permission will be requested on connect"}
+                {webrtc.micPermission === "unsupported" && "Microphone not available in this browser"}
+              </span>
+            </div>
+          )}
         </form>
       )}
 
       {/* Empty state */}
-      {status === "connected" && rbStatus === "connected" && callList.length === 0 && (
+      {status === "connected" && rbStatus === "connected" && callList.length === 0 && !webrtc.currentCall && (
         <p className="text-gray-400 text-sm text-center mt-12">
-          Waiting for incoming calls…
+          {rbMode === "webrtc"
+            ? "WebRTC ready — waiting for incoming calls…"
+            : "Waiting for incoming calls…"}
         </p>
       )}
 
@@ -399,15 +545,35 @@ export function ScreenPopProvider() {
         </p>
       )}
 
-      {/* Notification stack */}
+      {/* WebRTC softphone controls (shown for WebRTC calls) */}
+      {isWebRTCActive && webrtc.currentCall && webrtc.callState !== "idle" && (
+        <SoftphoneControls
+          call={webrtc.currentCall}
+          callQuality={webrtc.callQuality}
+          onAnswer={webrtc.answer}
+          onReject={webrtc.reject}
+          onHangup={webrtc.hangup}
+          onToggleMute={webrtc.toggleMute}
+          onToggleHold={webrtc.toggleHold}
+        />
+      )}
+
+      {/* SSE notification stack */}
       {callList.map((call, i) => (
         <CallNotification
           key={call.callId}
           call={call}
           index={i}
           onDismiss={handleDismiss}
+          webrtcMode={isWebRTCActive}
+          onAnswer={isWebRTCActive ? webrtc.answer : undefined}
+          onReject={isWebRTCActive ? webrtc.reject : undefined}
         />
       ))}
+
+      {/* Hidden audio element for WebRTC remote audio */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio ref={webrtc.audioRef} autoPlay style={{ display: "none" }} />
     </div>
   );
 }
