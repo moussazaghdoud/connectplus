@@ -23,7 +23,16 @@ export const POST = apiHandler(
     const url = new URL(request.url);
     const subPath = url.searchParams.get("subpath") ?? "";
 
-    const eventType = subPath || body?.eventType || body?.type || "unknown";
+    // Detect event type from subpath, body fields, or body structure
+    let eventType = subPath || body?.eventType || body?.type || "";
+    if (!eventType && body?.event && (body.event.legs || body.event.calls)) {
+      eventType = "telephony/rvcp";
+    }
+    if (!eventType && body?.presence) {
+      eventType = "presence";
+    }
+    if (!eventType) eventType = "unknown";
+
     // Use tenant from query, or DEFAULT_TENANT_ID env, or fall back to ctx
     const tenantId = url.searchParams.get("tenant")
       ?? process.env.DEFAULT_TENANT_ID
