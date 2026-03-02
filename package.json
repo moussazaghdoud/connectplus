@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "postinstall": "node scripts/copy-rainbow-web-sdk.js"
+    "postinstall": "node -e \"try{require('./scripts/copy-rainbow-web-sdk.js')}catch(e){}\""
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",
