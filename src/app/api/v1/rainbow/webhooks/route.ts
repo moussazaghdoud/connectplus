@@ -30,7 +30,7 @@ export const POST = apiHandler(
       ?? ctx.tenant.tenantId;
 
     logger.info(
-      { eventType, subPath, callId: body?.callId, tenantId },
+      { eventType, subPath, callId: body?.callId, tenantId, body: JSON.stringify(body).slice(0, 500) },
       "Rainbow S2S callback received"
     );
 
