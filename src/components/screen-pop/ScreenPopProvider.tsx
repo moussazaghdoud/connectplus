@@ -55,12 +55,13 @@ export function ScreenPopProvider() {
       es.addEventListener("screen.pop", (e) => {
         try {
           const data = JSON.parse(e.data);
+          const callId = data.interactionId || data.callId || "unknown";
           const notification: CallNotificationData = {
-            callId: data.callId,
+            callId,
             callerNumber: data.callerNumber || data.caller || "Unknown",
-            contactName: data.contactName,
-            companyName: data.companyName,
-            crmUrl: data.crmUrl,
+            contactName: data.contact?.displayName || data.contactName,
+            companyName: data.contact?.company || data.companyName,
+            crmUrl: data.contact?.crmUrl || data.crmUrl,
             status: "RINGING",
             startedAt: Date.now(),
           };
@@ -73,15 +74,20 @@ export function ScreenPopProvider() {
       es.addEventListener("call.updated", (e) => {
         try {
           const data = JSON.parse(e.data);
+          const callId = data.interactionId || data.callId || data.rainbowCallId;
           setCalls((prev) => {
             const next = new Map(prev);
-            const existing = next.get(data.callId);
+            // Try to find by callId, or by rainbowCallId match
+            const existing = next.get(callId) ||
+              (data.rainbowCallId ? Array.from(next.values()).find(c => c.callId === data.rainbowCallId) : undefined);
             if (existing) {
-              next.set(data.callId, {
+              const key = existing.callId;
+              const newStatus = data.status === "ACTIVE" || data.state === "ACTIVE" ? "ACTIVE" : existing.status;
+              next.set(key, {
                 ...existing,
-                status: data.state === "ACTIVE" ? "ACTIVE" : existing.status,
-                startedAt:
-                  data.state === "ACTIVE" ? Date.now() : existing.startedAt,
+                callId: callId || key, // Update to real interaction ID if available
+                status: newStatus,
+                startedAt: newStatus === "ACTIVE" && existing.status !== "ACTIVE" ? Date.now() : existing.startedAt,
               });
             }
             return next;
@@ -94,11 +100,12 @@ export function ScreenPopProvider() {
       es.addEventListener("call.ended", (e) => {
         try {
           const data = JSON.parse(e.data);
+          const callId = data.interactionId || data.callId;
           setCalls((prev) => {
             const next = new Map(prev);
-            const existing = next.get(data.callId);
+            const existing = next.get(callId);
             if (existing) {
-              next.set(data.callId, { ...existing, status: "COMPLETED" });
+              next.set(callId, { ...existing, status: "COMPLETED" });
             }
             return next;
           });

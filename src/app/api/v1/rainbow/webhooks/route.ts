@@ -38,7 +38,7 @@ export const POST = apiHandler(
       ?? process.env.DEFAULT_TENANT_ID
       ?? ctx.tenant.tenantId;
 
-    console.log(`[Rainbow Webhook] ${eventType} | body: ${JSON.stringify(body).slice(0, 500)}`);
+    console.log(`[Rainbow Webhook] ${eventType} | tenant: ${tenantId} | body: ${JSON.stringify(body).slice(0, 500)}`);
 
     logger.info(
       { eventType, subPath, callId: body?.callId, tenantId },
