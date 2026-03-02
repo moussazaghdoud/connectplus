@@ -110,12 +110,14 @@ export function ScreenPopProvider() {
       es.addEventListener("call.ended", (e) => {
         try {
           const data = JSON.parse(e.data);
-          const callId = data.interactionId || data.callId;
+          const callId = data.interactionId || data.callId || data.rainbowCallId;
           setCalls((prev) => {
             const next = new Map(prev);
-            const existing = next.get(callId);
+            const existing = next.get(callId) ||
+              (data.rainbowCallId ? Array.from(next.values()).find(c => c.callId === data.rainbowCallId) : undefined);
             if (existing) {
-              next.set(callId, { ...existing, status: "COMPLETED" });
+              const key = existing.callId;
+              next.set(key, { ...existing, status: "COMPLETED" });
             }
             return next;
           });

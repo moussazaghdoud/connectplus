@@ -184,6 +184,7 @@ class InboundCallHandler {
         interactionId: interaction.id,
         status: "COMPLETED",
         durationSecs: updated?.durationSecs ?? undefined,
+        rainbowCallId: callId,
       });
     }
 
