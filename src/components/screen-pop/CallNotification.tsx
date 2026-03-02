@@ -55,7 +55,7 @@ export function CallNotification({
 
   const statusConfig = {
     RINGING: {
-      label: "Incoming Call",
+      label: "Ringing",
       bg: "bg-blue-50 border-blue-300",
       badge: "bg-blue-100 text-blue-700",
       dot: "bg-blue-500 animate-pulse",
