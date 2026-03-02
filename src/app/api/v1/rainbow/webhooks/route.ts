@@ -25,7 +25,7 @@ export const POST = apiHandler(
 
     // Detect event type from subpath, body fields, or body structure
     let eventType = subPath || body?.eventType || body?.type || "";
-    if (!eventType && body?.event && (body.event.legs || body.event.calls)) {
+    if (!eventType && body?.event && (body.event.legs || body.event.calls || body.event.endpoints)) {
       eventType = "telephony/rvcp";
     }
     if (!eventType && body?.presence) {

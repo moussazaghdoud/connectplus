@@ -212,47 +212,78 @@ class InboundCallHandler {
     const calls = eventObj.calls as Array<Record<string, unknown>> | undefined;
     const legs = eventObj.legs as Array<Record<string, unknown>> | undefined;
 
-    // Extract call info from calls array or legs array
+    const endpoints = eventObj.endpoints as Array<Record<string, unknown>> | undefined;
+
+    // Build a map of callId → caller phone from endpoints (Rainbow puts phone numbers here)
+    const endpointPhones = new Map<string, string>();
+    if (endpoints) {
+      for (const ep of endpoints) {
+        const epCallId = (ep.callId as string) ?? "";
+        const phone = String(ep.phoneNumber ?? ep.displayName ?? "");
+        if (epCallId && phone) {
+          endpointPhones.set(epCallId, phone);
+        }
+      }
+    }
+
+    // Extract call info from calls array
     if (calls && calls.length > 0) {
       for (const call of calls) {
         const callId = (call.callId as string) ?? (call.id as string) ?? "unknown";
         const status = (call.status as string) ?? "";
+        const op = (call.op as string) ?? "";
         const callerNumber = (call.callingPartyNumber as string) ??
-          (call.remotePartyNumber as string) ?? "";
+          (call.remotePartyNumber as string) ??
+          endpointPhones.get(callId) ?? "";
 
         logger.info(
-          { tenantId, callId, status, callerNumber },
+          { tenantId, callId, status, op, callerNumber },
           "Rainbow telephony call event"
         );
 
-        if (status === "ringing" || status === "queued") {
+        if (status === "ringing" || status === "ringingIn" || status === "ringingOut" || status === "queued") {
           await this.handleRinging(tenantId, { callId, callerNumber, from: callerNumber });
-        } else if (status === "active" || status === "answered") {
+        } else if (status === "active" || status === "activeIn" || status === "answered") {
           await this.handleStatusChange(tenantId, { callId }, "ACTIVE");
-        } else if (status === "released" || status === "cleared") {
+        } else if (status === "released" || status === "cleared" || op === "ended") {
           await this.handleStatusChange(tenantId, { callId }, "COMPLETED");
         }
       }
     }
 
-    // Also check legs for call state
+    // Check legs for call state
     if (legs && legs.length > 0) {
       for (const leg of legs) {
         const callId = (leg.callId as string) ?? (leg.id as string) ?? "unknown";
         const state = (leg.state as string) ?? "";
+        const op = (leg.op as string) ?? "";
         const callerNumber = (leg.callingPartyNumber as string) ??
-          (leg.remotePartyNumber as string) ?? "";
+          (leg.remotePartyNumber as string) ??
+          endpointPhones.get(callId) ?? "";
 
         logger.info(
-          { tenantId, callId, state, callerNumber },
+          { tenantId, callId, state, op, callerNumber },
           "Rainbow telephony leg event"
         );
 
-        if (state === "ringing" || state === "queued") {
+        if (state === "ringing" || state === "ringingIn" || state === "ringingOut" || state === "queued") {
           await this.handleRinging(tenantId, { callId, callerNumber, from: callerNumber });
-        } else if (state === "active" || state === "answered" || state === "connected") {
+        } else if (state === "active" || state === "activeIn" || state === "answered" || state === "connected") {
           await this.handleStatusChange(tenantId, { callId }, "ACTIVE");
-        } else if (state === "released" || state === "cleared" || state === "disconnected") {
+        } else if (state === "released" || state === "cleared" || state === "disconnected" || op === "ended") {
+          await this.handleStatusChange(tenantId, { callId }, "COMPLETED");
+        }
+      }
+    }
+
+    // Check endpoints for ended events (when no legs/calls are present)
+    if (!calls?.length && !legs?.length && endpoints && endpoints.length > 0) {
+      for (const ep of endpoints) {
+        const callId = (ep.callId as string) ?? "unknown";
+        const op = (ep.op as string) ?? "";
+
+        if (op === "ended" && callId !== "unknown") {
+          logger.info({ tenantId, callId, op }, "Rainbow telephony endpoint ended");
           await this.handleStatusChange(tenantId, { callId }, "COMPLETED");
         }
       }
