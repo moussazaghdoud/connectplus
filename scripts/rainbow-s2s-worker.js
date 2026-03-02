@@ -18,7 +18,8 @@ const HOST_CALLBACK = process.env.RAINBOW_HOST_CALLBACK;
 const LOGIN = process.env.RAINBOW_LOGIN;
 const PASSWORD = process.env.RAINBOW_PASSWORD;
 const HOST = process.env.RAINBOW_HOST || "official";
-const WEBHOOK_URL = `http://localhost:${process.env.PORT || 8080}/api/v1/rainbow/webhooks`;
+const TENANT_ID = process.env.RAINBOW_TENANT_ID || "";
+const WEBHOOK_URL = `http://localhost:${process.env.PORT || 3000}/api/v1/rainbow/webhooks${TENANT_ID ? `?tenant=${TENANT_ID}` : ""}`;
 
 if (!APP_ID || !APP_SECRET || !HOST_CALLBACK || !LOGIN || !PASSWORD) {
   console.log(`${LOG} Missing Rainbow env vars — worker disabled`);

@@ -102,6 +102,7 @@ class S2SConnectionManager {
         RAINBOW_HOST_CALLBACK: hostCallback,
         RAINBOW_LOGIN: params.login,
         RAINBOW_PASSWORD: params.password,
+        RAINBOW_TENANT_ID: tenantId,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

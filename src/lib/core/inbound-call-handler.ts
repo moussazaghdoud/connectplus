@@ -327,4 +327,13 @@ class InboundCallHandler {
   }
 }
 
-export const inboundCallHandler = new InboundCallHandler();
+/** Singleton — stored on globalThis to survive Next.js module re-bundling */
+const globalForHandler = globalThis as unknown as {
+  inboundCallHandler: InboundCallHandler | undefined;
+};
+
+if (!globalForHandler.inboundCallHandler) {
+  globalForHandler.inboundCallHandler = new InboundCallHandler();
+}
+
+export const inboundCallHandler = globalForHandler.inboundCallHandler;
