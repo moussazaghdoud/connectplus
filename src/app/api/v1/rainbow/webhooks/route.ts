@@ -24,7 +24,10 @@ export const POST = apiHandler(
     const subPath = url.searchParams.get("subpath") ?? "";
 
     const eventType = subPath || body?.eventType || body?.type || "unknown";
-    const tenantId = url.searchParams.get("tenant") ?? ctx.tenant.tenantId;
+    // Use tenant from query, or DEFAULT_TENANT_ID env, or fall back to ctx
+    const tenantId = url.searchParams.get("tenant")
+      ?? process.env.DEFAULT_TENANT_ID
+      ?? ctx.tenant.tenantId;
 
     logger.info(
       { eventType, subPath, callId: body?.callId, tenantId },
@@ -40,15 +43,15 @@ export const POST = apiHandler(
       payload: body,
     });
 
-    // Audit log
-    await writeAuditLog({
+    // Audit log (non-blocking — don't fail the webhook response)
+    writeAuditLog({
       tenantId,
       correlationId: ctx.correlationId,
       actor: "rainbow:s2s",
       action: `rainbow.${eventType}`,
       resource: `call:${body?.callId ?? "unknown"}`,
       detail: body,
-    });
+    }).catch(() => {}); // swallow audit errors silently
 
     return NextResponse.json({ status: "received" });
   },
