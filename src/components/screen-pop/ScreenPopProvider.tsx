@@ -95,7 +95,6 @@ export function ScreenPopProvider() {
               const newStatus = data.status === "ACTIVE" || data.state === "ACTIVE" ? "ACTIVE" : existing.status;
               next.set(key, {
                 ...existing,
-                callId: callId || key,
                 status: newStatus,
                 startedAt: newStatus === "ACTIVE" && existing.status !== "ACTIVE" ? Date.now() : existing.startedAt,
               });
