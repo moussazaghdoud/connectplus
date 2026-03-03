@@ -596,72 +596,80 @@ export function useRainbowWebSDK(
     const callAny = call as unknown as Record<string, unknown>;
     const sdkAny = sdk as unknown as Record<string, unknown>;
 
-    console.log("[WebRTC] Call keys:", Object.keys(callAny));
     console.log("[WebRTC] Call status:", JSON.stringify(callAny.status), "| type:", JSON.stringify(callAny.type));
 
-    // Scan ALL SDK services for answer-like methods
+    // The call from getActiveCall() is a telephony/gateway wrapper.
+    // For SipWise/media pillar, we need the underlying WebRTC P2P call.
+    // Look for it in webrtcP2PService or via the call's internal references.
+
+    // 1. Try the call's webrtcCall / p2pCall reference
+    const p2pCall = (callAny.webrtcCall ?? callAny._webrtcCall ?? callAny.p2pCall ?? callAny._p2pCall) as Record<string, unknown> | undefined;
+    if (p2pCall) {
+      console.log("[WebRTC] Found P2P call ref, status:", JSON.stringify(p2pCall.status));
+    }
+
+    // 2. Try to find the P2P call in webrtcP2PService
+    let webrtcP2P: Record<string, unknown> | undefined;
     const allKeys = new Set<string>();
-    let p = Object.getPrototypeOf(sdk);
-    while (p && p !== Object.prototype) {
-      Object.getOwnPropertyNames(p).forEach(k => allKeys.add(k));
-      p = Object.getPrototypeOf(p);
+    let proto = Object.getPrototypeOf(sdk);
+    while (proto && proto !== Object.prototype) {
+      Object.getOwnPropertyNames(proto).forEach(k => allKeys.add(k));
+      proto = Object.getPrototypeOf(proto);
     }
     Object.keys(sdk).forEach(k => allKeys.add(k));
 
-    let answered = false;
-
     for (const key of allKeys) {
-      if (answered) break;
       try {
-        const svc = sdkAny[key];
-        if (!svc || typeof svc !== "object") continue;
-        const svcObj = svc as Record<string, unknown>;
-
-        // Look for answerCall method on each service
-        if (typeof svcObj.answerCall === "function" && key !== "callService") {
-          console.log(`[WebRTC] Trying ${key}.answerCall`);
-          try {
-            const r = (svcObj.answerCall as Function)(call);
-            if (r?.then) {
-              (r as Promise<void>).then(
-                () => console.log(`[WebRTC] ${key}.answerCall OK`),
-                (e: unknown) => console.warn(`[WebRTC] ${key}.answerCall rejected:`, e)
-              );
-            }
-            answered = true;
-          } catch (e) { console.warn(`[WebRTC] ${key}.answerCall threw:`, e); }
+        if (/webrtc.*p2p|p2p.*service/i.test(key)) {
+          const svc = sdkAny[key];
+          if (svc && typeof svc === "object") {
+            webrtcP2P = svc as Record<string, unknown>;
+            console.log("[WebRTC] Found webrtcP2P service at:", key);
+            break;
+          }
         }
       } catch { /* skip */ }
     }
 
-    // Try call object's own methods
-    if (!answered) {
-      for (const method of ["answer", "accept", "answerInAudio", "answerCall"]) {
-        if (typeof callAny[method] === "function") {
-          console.log(`[WebRTC] Trying call.${method}()`);
+    // 3. Try accepting via webrtcP2P service
+    if (webrtcP2P) {
+      const p2pMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(webrtcP2P))
+        .filter(m => /answer|accept|propose|session/i.test(m));
+      console.log("[WebRTC] webrtcP2P methods:", p2pMethods);
+
+      for (const method of ["answerCall", "acceptProposition", "acceptCall", "answer"]) {
+        if (typeof webrtcP2P[method] === "function") {
+          console.log(`[WebRTC] Trying webrtcP2P.${method}`);
           try {
-            const r = (callAny[method] as Function)();
-            if (r?.then) {
-              (r as Promise<void>).then(
-                () => console.log(`[WebRTC] call.${method}() OK`),
-                (e: unknown) => console.warn(`[WebRTC] call.${method}() rejected:`, e)
-              );
-            }
-            answered = true;
-            break;
-          } catch (e) { console.warn(`[WebRTC] call.${method}() threw:`, e); }
+            const r = (webrtcP2P[method] as Function)(p2pCall ?? call);
+            if (r?.then) (r as Promise<void>).then(
+              () => console.log(`[WebRTC] webrtcP2P.${method} OK`),
+              (e: unknown) => console.warn(`[WebRTC] webrtcP2P.${method} rejected:`, e)
+            );
+            return;
+          } catch (e) { console.warn(`[WebRTC] webrtcP2P.${method} threw:`, e); }
         }
       }
     }
 
-    // Last resort: callService (may reject for SipWise but try anyway)
-    if (!answered) {
-      console.log("[WebRTC] Fallback: callService.answerCall");
-      sdk.callService.answerCall(call, false).then(
-        () => console.log("[WebRTC] callService.answerCall OK"),
-        (e: unknown) => console.error("[WebRTC] All answer methods failed. Last:", e)
-      );
+    // 4. Try callService with the P2P call (not the gateway call)
+    if (p2pCall) {
+      console.log("[WebRTC] Trying callService.answerCall with P2P call");
+      try {
+        sdk.callService.answerCall(p2pCall as unknown as RainbowCall, false).then(
+          () => console.log("[WebRTC] answerCall(p2pCall) OK"),
+          (e: unknown) => console.warn("[WebRTC] answerCall(p2pCall) rejected:", e)
+        );
+        return;
+      } catch (e) { console.warn("[WebRTC] answerCall(p2pCall) threw:", e); }
     }
+
+    // 5. Try callService.answerCall with video=true (it's a Video type call)
+    console.log("[WebRTC] Trying callService.answerCall(call, true) for Video call");
+    sdk.callService.answerCall(call, true).then(
+      () => console.log("[WebRTC] answerCall(video=true) OK"),
+      (e: unknown) => console.error("[WebRTC] answerCall(video=true) rejected:", e)
+    );
   }, []);
 
   const reject = useCallback(() => {
