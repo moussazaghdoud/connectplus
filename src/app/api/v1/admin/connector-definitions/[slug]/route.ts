@@ -55,7 +55,7 @@ export const PUT = apiHandler(async (request: NextRequest, ctx, params) => {
       ...(name !== undefined && { name }),
       ...(description !== undefined && { description }),
       ...(logoUrl !== undefined && { logoUrl }),
-      ...(config !== undefined && { config: config as object }),
+      ...(config !== undefined && { config: config as never }),
       version: newVersion,
     },
   });
@@ -66,7 +66,7 @@ export const PUT = apiHandler(async (request: NextRequest, ctx, params) => {
       data: {
         definitionId: existing.id,
         version: newVersion,
-        config: config as object,
+        config: config as never,
         changedBy: ctx.tenant.tenantSlug,
       },
     });
