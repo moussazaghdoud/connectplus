@@ -337,10 +337,11 @@ export function useRainbowWebSDK(
       setError(null);
 
       try {
-        // Dynamic import hidden from Turbopack static analysis so the 6MB
-        // browser-only SDK is not bundled into the server build.
-        const moduleName = "rainbow-web-sdk";
-        const rainbowModule = await (Function(`return import("${moduleName}")`)() as Promise<Record<string, unknown>>);
+        // Load Rainbow Web SDK v5 from CDN at runtime (browser only).
+        // Not bundled via npm because the SDK's native `canvas` dep
+        // breaks Alpine Docker builds.
+        const CDN_URL = "https://cdn.jsdelivr.net/npm/rainbow-web-sdk@5.0.43-sts/lib/index.js";
+        const rainbowModule = await (Function(`return import("${CDN_URL}")`)() as Promise<Record<string, unknown>>);
         const RainbowSDK = (rainbowModule.RainbowSDK ?? rainbowModule.default) as { create?: (config: Record<string, string>) => RainbowSDKInstance };
 
         if (!RainbowSDK?.create) {
