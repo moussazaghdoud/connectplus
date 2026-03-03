@@ -457,93 +457,95 @@ export function useRainbowWebSDK(
         const sdkAny = sdk as unknown as Record<string, unknown>;
         let lastCallId = "";
 
-        // Discover all services on the SDK instance (including private ones)
-        const allKeys = new Set<string>();
-        let proto = Object.getPrototypeOf(sdk);
-        while (proto && proto !== Object.prototype) {
-          Object.getOwnPropertyNames(proto).forEach(k => allKeys.add(k));
-          proto = Object.getPrototypeOf(proto);
-        }
-        Object.keys(sdk).forEach(k => allKeys.add(k));
+        // Subscribe to conversationService for call events — the official pattern
+        // from Rainbow-CPaaS/Rainbow-Web-SDK-Samples-v2.
+        // The call object from conversation.call has proper internal state and
+        // can be answered with call.answer().
+        const convSvc = sdkAny.conversationService as Record<string, unknown> | undefined;
+        if (convSvc?.subscribe) {
+          (convSvc.subscribe as Function)(
+            (event: { name: string; data: Record<string, unknown> }) => {
+              try {
+                const conv = event.data?.conversation as Record<string, unknown> | undefined;
+                const call = conv?.call as Record<string, unknown> | undefined;
 
-        const serviceKeys = [...allKeys].filter(k =>
-          /service|webrtc|telephony|call/i.test(k) && k !== "constructor"
-        );
-        console.log("[WebRTC] Available service-like properties:", serviceKeys);
+                if (event.name === "ON_NEW_CALL_IN_CONVERSATION" && call) {
+                  const statusVal = call.callStatus ?? call.status ?? "";
+                  const rawStatus = typeof statusVal === "object" && statusVal !== null
+                    ? String((statusVal as Record<string, unknown>).value ?? "")
+                    : String(statusVal);
+                  const mapped = mapCallStatus(rawStatus);
+                  const state = mapped === "idle" ? "ringing_incoming" : mapped;
+                  const contact = call.contact as Record<string, unknown> | undefined;
+                  const caller = String(contact?.displayName ?? call.callerNumber ?? "");
+                  const cid = String(call.id ?? conv.id ?? `call-${Date.now()}`);
 
-        // Subscribe to services for logging only (don't drive state from these)
-        for (const key of serviceKeys) {
-          try {
-            const svc = sdkAny[key] as Record<string, unknown> | undefined;
-            if (svc && typeof svc === "object" && typeof svc.subscribe === "function") {
-              (svc.subscribe as Function)((event: { name: string; data: unknown }) => {
-                console.log(`[WebRTC] ${key} event:`, event.name);
-              });
-              console.log(`[WebRTC] Subscribed to ${key} (logging)`);
-            }
-          } catch { /* skip inaccessible */ }
-        }
+                  console.log("[WebRTC] NEW CALL via conversation:", {
+                    id: cid, rawStatus, state, caller,
+                    hasAnswer: typeof call.answer === "function",
+                    capabilities: call.capabilities,
+                  });
 
-        // Poll getActiveCall() every second — sole driver of call state.
-        // Service events are unreliable (send conversation objects, not calls).
-        const pollId = setInterval(() => {
-          try {
-            const cs = sdk.callService as unknown as Record<string, unknown> | undefined;
-            if (!cs?.getActiveCall) return;
+                  // Store the CONVERSATION call — this one can be answered
+                  rawCallRef.current = call as unknown as RainbowCall;
+                  lastCallId = cid;
+                  setCallState(state as CallState);
+                  setCurrentCall({
+                    callId: cid,
+                    callerNumber: caller,
+                    state: state as CallState,
+                    isMuted: false,
+                    isOnHold: false,
+                    startedAt: state === "active" ? Date.now() : null,
+                  });
+                  reportCallEvent(cid, "ringing_incoming", caller);
 
-            const call = (cs.getActiveCall as Function)() as Record<string, unknown> | null;
+                  // Subscribe to call-level events for status updates
+                  if (typeof call.subscribe === "function") {
+                    (call.subscribe as Function)((ce: { name: string }) => {
+                      const c = conv.call as Record<string, unknown> | undefined;
+                      if (!c) return;
+                      const sv = c.callStatus ?? c.status ?? "";
+                      const rs = typeof sv === "object" ? String((sv as Record<string, unknown>).value ?? "") : String(sv);
+                      const ns = mapCallStatus(rs);
+                      console.log("[WebRTC] Call update:", rs, "→", ns);
 
-            if (call && call.id) {
-              // status may be a string, enum object, or nested — extract string value
-              const statusVal = call.status ?? call.state ?? "";
-              const rawStatus = typeof statusVal === "object" && statusVal !== null
-                ? String((statusVal as Record<string, unknown>).value ?? (statusVal as Record<string, unknown>).name ?? (statusVal as Record<string, unknown>).key ?? JSON.stringify(statusVal))
-                : String(statusVal);
-              const mapped = mapCallStatus(rawStatus);
-              const state = mapped === "idle" ? "ringing_incoming" : mapped;
-              const caller = String(
-                call.callerNumber ?? call.callingPartyNumber ??
-                call.remotePartyNumber ?? call.displayName ?? ""
-              );
-              const cid = String(call.id);
+                      rawCallRef.current = c as unknown as RainbowCall;
+                      setCallState(ns);
+                      setCurrentCall(prev => prev ? {
+                        ...prev, state: ns,
+                        isMuted: !!(c.isMuted ?? c.muted),
+                        isOnHold: !!(c.isOnHold ?? c.held),
+                        startedAt: ns === "active" && !prev.startedAt ? Date.now() : prev.startedAt,
+                      } : null);
+                      if (ns === "active") reportCallEvent(cid, "active", caller);
+                    });
+                  }
+                }
 
-              if (cid !== lastCallId) {
-                lastCallId = cid;
-                console.log("[WebRTC] Poll: NEW call", { id: cid, rawStatus, state, caller });
-                reportCallEvent(cid, "ringing_incoming", caller);
+                if (event.name === "ON_REMOVE_CALL_IN_CONVERSATION") {
+                  console.log("[WebRTC] Call removed");
+                  reportCallEvent(lastCallId, "ended", "");
+                  lastCallId = "";
+                  setCallState("ended");
+                  setCurrentCall(prev => prev ? { ...prev, state: "ended" } : null);
+                  setTimeout(() => {
+                    setCallState("idle");
+                    setCurrentCall(null);
+                    rawCallRef.current = null;
+                    reportedStatesRef.current.clear();
+                  }, 4000);
+                }
+              } catch (err) {
+                console.error("[WebRTC] Event handler error:", err);
               }
-
-              // Set state directly (avoid stale closure issues with handleCallChanged)
-              rawCallRef.current = call as unknown as RainbowCall;
-              setCallState(state as CallState);
-              setCurrentCall({
-                callId: cid,
-                callerNumber: caller,
-                state: state as CallState,
-                isMuted: !!(call.isMuted ?? call.muted),
-                isOnHold: !!(call.isOnHold ?? call.held),
-                startedAt: state === "active" ? Date.now() : null,
-              });
-            } else if (lastCallId) {
-              console.log("[WebRTC] Poll: call ended");
-              reportCallEvent(lastCallId, "ended", "");
-              lastCallId = "";
-              setCallState("ended");
-              setCurrentCall(prev => prev ? { ...prev, state: "ended" } : null);
-              setTimeout(() => {
-                setCallState("idle");
-                setCurrentCall(null);
-                rawCallRef.current = null;
-                reportedStatesRef.current.clear();
-              }, 4000);
-            }
-          } catch {
-            // Don't break the poll
-          }
-        }, 1000);
-
-        (sdkAny as Record<string, unknown>)._callPollId = pollId;
-        console.log("[WebRTC] Call monitoring started (poll + subscribe)");
+            },
+            ["ON_NEW_CALL_IN_CONVERSATION", "ON_REMOVE_CALL_IN_CONVERSATION"]
+          );
+          console.log("[WebRTC] Subscribed to conversationService (official pattern)");
+        } else {
+          console.warn("[WebRTC] conversationService not available");
+        }
 
         setStatus("logged_in");
         setError(null);
@@ -588,94 +590,50 @@ export function useRainbowWebSDK(
   // ── Call control ───────────────────────────────────────
 
   const answer = useCallback(async () => {
-    const sdk = sdkRef.current;
     const call = rawCallRef.current;
-    console.log("[WebRTC] Answer clicked", { sdk: !!sdk, call: !!call, callId: call?.id });
-    if (!sdk || !call) return;
+    const callAny = call as unknown as Record<string, unknown> | null;
+    console.log("[WebRTC] Answer clicked", {
+      hasCall: !!call,
+      hasAnswer: typeof callAny?.answer === "function",
+      capabilities: callAny?.capabilities,
+    });
+    if (!callAny) return;
 
-    const callAny = call as unknown as Record<string, unknown>;
-    const sdkAny = sdk as unknown as Record<string, unknown>;
-
-    const statusStr = JSON.stringify(callAny.status);
-    console.log("[WebRTC] Call status:", statusStr, "| type:", JSON.stringify(callAny.type));
-
-    // The telephony call (status: incommingCall) can't be answered via callService
-    // because callService expects the P2P call (status: RINGING_INCOMMING).
-    // For SipWise: answer via Rainbow REST API directly.
-
-    // Extract the telephony call ID (SDxxxxx format)
-    const telCallId = (callAny.telephonyCallId ?? callAny.telCallId ?? callAny.connectionId) as string | undefined;
-    console.log("[WebRTC] Telephony call ID:", telCallId);
-
-    // Try REST API answer for SipWise
-    try {
-      console.log("[WebRTC] Answering via Rainbow REST API");
-      const token = (sdkAny._connectionService as Record<string, unknown> | undefined)?.token
-        ?? (sdkAny.connectionService as Record<string, unknown> | undefined)?.token;
-
-      // Find the auth token from the SDK
-      let authToken = token as string | undefined;
-      if (!authToken) {
-        // Try to get from localStorage (SDK stores it)
-        authToken = localStorage.getItem("rainbow_token") ?? undefined;
+    // Official pattern: call.answer() on the conversation's call object
+    if (typeof callAny.answer === "function") {
+      try {
+        await (callAny.answer as (withVideo?: boolean) => Promise<void>)(false);
+        console.log("[WebRTC] call.answer() succeeded!");
+      } catch (e) {
+        console.error("[WebRTC] call.answer() failed:", e);
       }
-      if (!authToken) {
-        // Search SDK for token
-        for (const key of Object.keys(sdkAny)) {
-          const val = sdkAny[key];
-          if (val && typeof val === "object") {
-            const t = (val as Record<string, unknown>).token ?? (val as Record<string, unknown>).authToken;
-            if (typeof t === "string" && t.length > 20) {
-              authToken = t;
-              console.log("[WebRTC] Found token on:", key);
-              break;
-            }
-          }
-        }
-      }
-
-      if (authToken && telCallId) {
-        const resp = await fetch(`https://openrainbow.com/api/rainbow/voice/v1.0/calls/${encodeURIComponent(telCallId)}/answer`, {
-          method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        console.log("[WebRTC] REST answer response:", resp.status, await resp.text());
-        return;
-      }
-
-      if (!authToken) console.warn("[WebRTC] No auth token found for REST API");
-      if (!telCallId) console.warn("[WebRTC] No telephony call ID found. Call keys:", Object.keys(callAny).filter(k => /call|id|tel|conn/i.test(k)));
-    } catch (e) { console.error("[WebRTC] REST answer failed:", e); }
-
-    // Fallback: try callService anyway
-    console.log("[WebRTC] Fallback: callService.answerCall");
-    sdk.callService.answerCall(call, false).then(
-      () => console.log("[WebRTC] callService.answerCall OK"),
-      (e: unknown) => console.error("[WebRTC] callService.answerCall rejected:", e)
-    );
+    } else {
+      console.error("[WebRTC] No answer() method on call object");
+    }
   }, []);
 
-  const reject = useCallback(() => {
-    const sdk = sdkRef.current;
-    const call = rawCallRef.current;
-    console.log("[WebRTC] Reject clicked", { sdk: !!sdk, call: !!call });
-    if (!sdk || !call) return;
+  const reject = useCallback(async () => {
+    const callAny = rawCallRef.current as unknown as Record<string, unknown> | null;
+    if (!callAny) return;
+    console.log("[WebRTC] Reject clicked");
     try {
-      sdk.callService.releaseCall(call, "rejected");
-    } catch (e) { console.warn("[WebRTC] releaseCall(reject) failed:", e); }
+      if (typeof callAny.release === "function") {
+        await (callAny.release as () => Promise<void>)();
+      } else if (typeof callAny.decline === "function") {
+        await (callAny.decline as () => Promise<void>)();
+      }
+    } catch (e) { console.warn("[WebRTC] reject failed:", e); }
   }, []);
 
-  const hangup = useCallback(() => {
-    const sdk = sdkRef.current;
-    const call = rawCallRef.current;
-    console.log("[WebRTC] Hangup clicked", { sdk: !!sdk, call: !!call });
-    if (!sdk || !call) return;
+  const hangup = useCallback(async () => {
+    const callAny = rawCallRef.current as unknown as Record<string, unknown> | null;
+    if (!callAny) return;
+    console.log("[WebRTC] Hangup clicked");
     try {
-      sdk.callService.releaseCall(call);
-    } catch (e) { console.warn("[WebRTC] releaseCall(hangup) failed:", e); }
+      if (typeof callAny.release === "function") {
+        await (callAny.release as () => Promise<void>)();
+      }
+    } catch (e) { console.warn("[WebRTC] hangup failed:", e); }
   }, []);
 
   const toggleMute = useCallback(() => {
