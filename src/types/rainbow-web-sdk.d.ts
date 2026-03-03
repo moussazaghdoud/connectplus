@@ -34,12 +34,17 @@ export type RainbowCallStatus =
   | "releasing"
   | "unknown";
 
+export interface RainbowSDKAppConfig {
+  /** Rainbow backend server url */
+  server?: string;
+  /** Rainbow application identifier */
+  applicationId?: string;
+  /** Rainbow application secretKey */
+  secretKey?: string;
+}
+
 export interface RainbowSDKConfig {
-  appConfig: {
-    appID: string;
-    appSecret: string;
-    serverURL?: string;
-  };
+  appConfig?: RainbowSDKAppConfig;
   autoLogin?: boolean;
   logLevel?: string;
 }

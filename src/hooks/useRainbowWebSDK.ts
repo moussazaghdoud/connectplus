@@ -358,9 +358,9 @@ export function useRainbowWebSDK(
 
         const instance = RainbowSDK.create({
           appConfig: {
-            appID: appId,
-            appSecret: appSecret,
-            serverURL,
+            server: serverURL,
+            applicationId: appId,
+            secretKey: appSecret,
           },
           autoLogin: false,
         } as never);
