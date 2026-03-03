@@ -435,7 +435,7 @@ export function useRainbowWebSDK(
         const pollId = setInterval(() => {
           // Try to find services (they appear after async init)
           const telSvc = sdkAny.telephonyService as Record<string, unknown> | undefined;
-          const callSvc = sdk.callService as Record<string, unknown> | undefined;
+          const callSvc = sdk.callService as unknown as Record<string, unknown> | undefined;
           const getSvc = (sdk as unknown as { get?: (n: string) => unknown }).get;
 
           // Try subscribing once services are found
