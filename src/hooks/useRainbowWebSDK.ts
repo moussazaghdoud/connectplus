@@ -493,25 +493,38 @@ export function useRainbowWebSDK(
             const call = (cs.getActiveCall as Function)() as Record<string, unknown> | null;
 
             if (call && call.id) {
-              // Call exists
-              if (call.id !== lastCallId) {
-                // New call detected
-                lastCallId = call.id as string;
-                const status = String(call.status ?? call.state ?? "");
-                console.log("[WebRTC] Poll: NEW call:", {
-                  id: call.id,
-                  status,
-                  type: call.type,
-                  keys: Object.keys(call).slice(0, 20),
-                });
+              const rawStatus = String(call.status ?? call.state ?? "");
+              const mapped = mapCallStatus(rawStatus);
+              const state = mapped === "idle" ? "ringing_incoming" : mapped;
+              const caller = String(
+                call.callerNumber ?? call.callingPartyNumber ??
+                call.remotePartyNumber ?? call.displayName ?? ""
+              );
+              const cid = String(call.id);
+
+              if (cid !== lastCallId) {
+                lastCallId = cid;
+                console.log("[WebRTC] Poll: NEW call", { id: cid, rawStatus, state, caller });
+                reportCallEvent(cid, "ringing_incoming", caller);
               }
-              // Always update state from the call object
-              handleCallChanged(call as unknown as RainbowCall);
+
+              // Set state directly (avoid stale closure issues with handleCallChanged)
+              rawCallRef.current = call as unknown as RainbowCall;
+              setCallState(state as CallState);
+              setCurrentCall({
+                callId: cid,
+                callerNumber: caller,
+                state: state as CallState,
+                isMuted: !!(call.isMuted ?? call.muted),
+                isOnHold: !!(call.isOnHold ?? call.held),
+                startedAt: state === "active" ? Date.now() : null,
+              });
             } else if (lastCallId) {
-              // Call disappeared — mark ended
-              console.log("[WebRTC] Poll: call ended (no active call)");
+              console.log("[WebRTC] Poll: call ended");
+              reportCallEvent(lastCallId, "ended", "");
               lastCallId = "";
               setCallState("ended");
+              setCurrentCall(prev => prev ? { ...prev, state: "ended" } : null);
               setTimeout(() => {
                 setCallState("idle");
                 setCurrentCall(null);
