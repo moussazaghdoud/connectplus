@@ -1,10 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { WizardShell } from "@/components/admin/connectors/WizardShell";
 
-export default function ConnectorWizardPage() {
+function WizardContent() {
   const searchParams = useSearchParams();
   const editSlug = searchParams.get("edit") ?? undefined;
   const [apiKey, setApiKey] = useState(
@@ -30,4 +31,12 @@ export default function ConnectorWizardPage() {
   }
 
   return <WizardShell apiKey={apiKey} editSlug={editSlug} />;
+}
+
+export default function ConnectorWizardPage() {
+  return (
+    <Suspense fallback={<div className="max-w-md mx-auto px-4 py-16 text-gray-400">Loading...</div>}>
+      <WizardContent />
+    </Suspense>
+  );
 }
