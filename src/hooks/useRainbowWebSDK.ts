@@ -427,34 +427,66 @@ export function useRainbowWebSDK(
         await sdk.connectionService.logon(email, password, false);
         console.log("[WebRTC] Login successful");
 
-        // Subscribe to call events from all available services
-        // The SDK v5 emits call events from multiple services
-        const subscribeToService = (name: string, service: unknown) => {
-          const svc = service as { subscribe?: (handler: (event: { name: string; data: unknown }) => void, eventName?: string) => { unsubscribe: () => void } } | undefined;
-          if (svc?.subscribe) {
-            svc.subscribe((event) => {
+        // Log available services and SDK structure
+        const sdkAny = sdk as unknown as Record<string, unknown>;
+        console.log("[WebRTC] SDK instance keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(sdk)));
+        console.log("[WebRTC] SDK own keys:", Object.keys(sdk));
+
+        // Try getting services via sdk.get() and direct access
+        const getSvc = (name: string) => {
+          const viaGet = (sdk as unknown as { get?: (n: string) => unknown }).get?.(name);
+          const viaProp = sdkAny[name];
+          console.log(`[WebRTC] Service "${name}": get=${!!viaGet}, prop=${!!viaProp}`);
+          return viaGet ?? viaProp;
+        };
+
+        const telephony = getSvc("telephonyService");
+        const webrtcP2P = getSvc("webrtcP2PService");
+        const calls = getSvc("callService");
+
+        // Subscribe to all available services
+        const trySubscribe = (name: string, svc: unknown) => {
+          if (!svc) return false;
+          const s = svc as Record<string, unknown>;
+          if (typeof s.subscribe === "function") {
+            (s.subscribe as Function)((event: { name: string; data: unknown }) => {
               console.log(`[WebRTC] ${name} event:`, event.name, event.data);
               handleCallChanged(event.data as RainbowCall);
             });
-            console.log(`[WebRTC] Subscribed to ${name}`);
+            console.log(`[WebRTC] Subscribed to ${name} via subscribe()`);
             return true;
           }
+          // Try RxJS Subject pattern
+          if (s.rxSubject && typeof (s.rxSubject as Record<string, unknown>).subscribe === "function") {
+            (s.rxSubject as { subscribe: Function }).subscribe((event: { name: string; data: unknown }) => {
+              console.log(`[WebRTC] ${name} rxSubject event:`, event.name, event.data);
+              handleCallChanged(event.data as RainbowCall);
+            });
+            console.log(`[WebRTC] Subscribed to ${name} via rxSubject`);
+            return true;
+          }
+          console.log(`[WebRTC] ${name}: no subscribe method found. Keys:`, Object.keys(s).slice(0, 15));
           return false;
         };
 
-        // Try multiple services — call events come from different places
-        const webrtcP2P = (sdk as unknown as Record<string, unknown>).webrtcP2PService;
-        const telephony = (sdk as unknown as Record<string, unknown>).telephonyService;
+        trySubscribe("telephonyService", telephony);
+        trySubscribe("webrtcP2PService", webrtcP2P);
+        trySubscribe("callService", calls);
 
-        let subscribed = false;
-        subscribed = subscribeToService("webrtcP2PService", webrtcP2P) || subscribed;
-        subscribed = subscribeToService("telephonyService", telephony) || subscribed;
-        subscribed = subscribeToService("callService", sdk.callService) || subscribed;
-
-        if (!subscribed) {
-          console.warn("[WebRTC] No call service available for subscription");
-          // List all available services for debugging
-          console.log("[WebRTC] SDK instance keys:", Object.keys(sdk));
+        // Polling fallback: check for ringing calls every 2s
+        // (in case event subscription doesn't work)
+        const telSvc = telephony as { getRingingIncomingCalls?: () => unknown[] } | undefined;
+        if (telSvc?.getRingingIncomingCalls) {
+          const pollId = setInterval(() => {
+            const ringing = telSvc.getRingingIncomingCalls!();
+            if (ringing && ringing.length > 0) {
+              console.log("[WebRTC] Poll found ringing call:", ringing[0]);
+              handleCallChanged(ringing[0] as RainbowCall);
+            }
+          }, 2000);
+          // Store for cleanup
+          (sdkAny as Record<string, unknown>)._callPollId = pollId;
+          console.log("[WebRTC] Polling fallback active for ringing calls");
         }
 
         setStatus("logged_in");
@@ -476,6 +508,10 @@ export function useRainbowWebSDK(
     stopQualityPolling();
 
     if (sdk) {
+      // Clear polling fallback
+      const pollId = (sdk as unknown as Record<string, unknown>)._callPollId;
+      if (pollId) clearInterval(pollId as ReturnType<typeof setInterval>);
+
       try {
         await sdk.stop();
       } catch {
