@@ -67,6 +67,7 @@ export interface UseRainbowWebSDKReturn {
   hangup: () => void;
   toggleMute: () => void;
   toggleHold: () => void;
+  makeCall: (phoneNumber: string) => Promise<void>;
 }
 
 // ── Helper: map SDK status to our CallState ──────────────
@@ -660,6 +661,28 @@ export function useRainbowWebSDK(
     );
   }, []);
 
+  // ── Click-to-Call ───────────────────────────────────────
+
+  const makeCall = useCallback(async (phoneNumber: string) => {
+    const sdk = sdkRef.current;
+    if (!sdk) {
+      console.error("[WebRTC] Cannot make call — SDK not initialized");
+      return;
+    }
+    console.log("[WebRTC] Making call to:", phoneNumber);
+    try {
+      const cs = sdk.callService as unknown as Record<string, unknown>;
+      if (typeof cs.makePhoneCall === "function") {
+        await (cs.makePhoneCall as (n: string) => Promise<void>)(phoneNumber);
+        console.log("[WebRTC] makePhoneCall initiated");
+      } else {
+        console.error("[WebRTC] callService.makePhoneCall not available");
+      }
+    } catch (err) {
+      console.error("[WebRTC] makePhoneCall failed:", err);
+    }
+  }, []);
+
   // ── Cleanup on unmount ─────────────────────────────────
 
   useEffect(() => {
@@ -691,5 +714,6 @@ export function useRainbowWebSDK(
     hangup,
     toggleMute,
     toggleHold,
+    makeCall,
   };
 }

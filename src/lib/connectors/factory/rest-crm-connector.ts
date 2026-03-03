@@ -45,7 +45,7 @@ export class RestCrmConnector implements ConnectorInterface {
   }
 
   private deriveCapabilities() {
-    const caps: ConnectorManifest["capabilities"] = ["contact_search"];
+    const caps: ConnectorManifest["capabilities"] = ["contact_search", "click_to_call"];
     if (this.def.writeBack) caps.push("interaction_writeback");
     return caps;
   }
