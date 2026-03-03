@@ -1,6 +1,6 @@
 /**
  * TypeScript declarations for the Rainbow Web SDK v5.
- * The SDK is loaded via dynamic import() from the `rainbow-web-sdk` npm package.
+ * Loaded from CDN at runtime via dynamic import.
  *
  * Only declares the subset of the API we use for WebRTC call control.
  * @see https://developers.openrainbow.com
@@ -35,9 +35,30 @@ export type RainbowCallStatus =
   | "unknown";
 
 export interface RainbowSDKConfig {
-  appID: string;
-  appSecret: string;
-  host: string;
+  appConfig: {
+    appID: string;
+    appSecret: string;
+    serverURL?: string;
+  };
+  autoLogin?: boolean;
+  logLevel?: string;
+}
+
+export interface RainbowConnectionService {
+  logon(login: string, password: string, rememberMe: boolean): Promise<unknown>;
+  logout(): Promise<void>;
+  start(): Promise<unknown>;
+  stop(): Promise<void>;
+}
+
+export interface RainbowCallService {
+  answerCall(call: RainbowCall, withVideo?: boolean): Promise<void>;
+  releaseCall(call: RainbowCall, reason?: string): Promise<void>;
+  holdCall(call: RainbowCall): Promise<void>;
+  retrieveCall(call: RainbowCall): Promise<void>;
+  muteCall(call: RainbowCall, mute: boolean): void;
+  getActiveCall(): RainbowCall | null;
+  subscribe(callback: (event: { name: string; data: unknown }) => void, eventNames?: string[]): { unsubscribe: () => void };
 }
 
 /**
@@ -46,23 +67,9 @@ export interface RainbowSDKConfig {
 export interface RainbowSDKInstance {
   start(): Promise<unknown>;
   stop(): Promise<void>;
-  connectionService: {
-    signin(login: string, password: string): Promise<unknown>;
-    signout(): Promise<void>;
-    getState(): string;
-  };
-  callService: {
-    answerInAudio(call: RainbowCall): void;
-    reject(call: RainbowCall): void;
-    release(call: RainbowCall): void;
-    holdCall(call: RainbowCall): void;
-    retrieveCall(call: RainbowCall): void;
-    muteCall(call: RainbowCall, mute: boolean): void;
-  };
-  events: {
-    on(event: string, callback: (...args: unknown[]) => void): void;
-    off(event: string, callback: (...args: unknown[]) => void): void;
-  };
+  connectionService: RainbowConnectionService;
+  callService: RainbowCallService;
+  getVersion(): string;
 }
 
 /**
@@ -73,7 +80,6 @@ export interface RainbowSDKStatic {
   getInstance(): RainbowSDKInstance;
 }
 
-// Legacy v1/v2 global (kept for reference — v5 uses ES module import)
 declare global {
   interface Window {
     rainbowSDK?: RainbowSDKInstance;

@@ -349,10 +349,13 @@ export function useRainbowWebSDK(
         }
 
         const instance = RainbowSDK.create({
-          appID: appId,
-          appSecret: appSecret,
-          host,
-        });
+          appConfig: {
+            appID: appId,
+            appSecret: appSecret,
+            serverURL: host,
+          },
+          autoLogin: false,
+        } as never);
 
         await instance.start();
 
@@ -388,10 +391,14 @@ export function useRainbowWebSDK(
       }
 
       try {
-        await sdk.connectionService.signin(email, password);
+        await sdk.connectionService.logon(email, password, false);
 
-        // Subscribe to call events via the events system
-        sdk.events.on("callChanged", handleCallChanged as (...args: unknown[]) => void);
+        // Subscribe to call events via the callService
+        sdk.callService.subscribe((event) => {
+          if (event.name === "callChanged" || event.name === "callUpdated") {
+            handleCallChanged(event.data as RainbowCall);
+          }
+        });
 
         setStatus("logged_in");
         setError(null);
@@ -433,21 +440,21 @@ export function useRainbowWebSDK(
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.callService.answerInAudio(call);
+    sdk.callService.answerCall(call, false);
   }, []);
 
   const reject = useCallback(() => {
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.callService.reject(call);
+    sdk.callService.releaseCall(call, "rejected");
   }, []);
 
   const hangup = useCallback(() => {
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.callService.release(call);
+    sdk.callService.releaseCall(call);
   }, []);
 
   const toggleMute = useCallback(() => {
