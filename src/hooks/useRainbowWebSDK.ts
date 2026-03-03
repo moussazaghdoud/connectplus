@@ -344,8 +344,10 @@ export function useRainbowWebSDK(
         const rainbowModule = await (Function(`return import("${CDN_URL}")`)() as Promise<Record<string, unknown>>);
         const RainbowSDK = (rainbowModule.RainbowSDK ?? rainbowModule.default) as { create?: (config: Record<string, string>) => RainbowSDKInstance };
 
+        console.log("[WebRTC] SDK module keys:", Object.keys(rainbowModule));
+
         if (!RainbowSDK?.create) {
-          throw new Error("Rainbow Web SDK module did not export RainbowSDK.create");
+          throw new Error("Rainbow Web SDK module did not export RainbowSDK.create. Keys: " + Object.keys(rainbowModule).join(", "));
         }
 
         // Map short host names to full Rainbow server URLs
@@ -363,7 +365,10 @@ export function useRainbowWebSDK(
           autoLogin: false,
         } as never);
 
-        await instance.start();
+        console.log("[WebRTC] SDK instance created, calling start()...");
+        const startResult = await instance.start();
+        console.log("[WebRTC] SDK start() result:", startResult);
+        console.log("[WebRTC] SDK version:", instance.getVersion?.());
 
         sdkRef.current = instance;
         // Also set on window for legacy compat / debugging
@@ -397,6 +402,12 @@ export function useRainbowWebSDK(
       }
 
       try {
+        // Log available methods for debugging
+        console.log("[WebRTC] SDK connectionService methods:",
+          Object.getOwnPropertyNames(Object.getPrototypeOf(sdk.connectionService))
+            .filter(m => m !== "constructor"));
+        console.log("[WebRTC] Attempting logon for:", email);
+
         await sdk.connectionService.logon(email, password, false);
 
         // Subscribe to call events via the callService
@@ -409,8 +420,10 @@ export function useRainbowWebSDK(
         setStatus("logged_in");
         setError(null);
       } catch (err) {
+        console.error("[WebRTC] Login failed:", err);
         setStatus("error");
-        setError(err instanceof Error ? err.message : "Login failed");
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Login failed: ${msg}`);
       }
     },
     [handleCallChanged, requestMicAccess]
