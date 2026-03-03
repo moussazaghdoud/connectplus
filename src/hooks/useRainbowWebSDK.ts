@@ -427,17 +427,34 @@ export function useRainbowWebSDK(
         await sdk.connectionService.logon(email, password, false);
         console.log("[WebRTC] Login successful");
 
-        // Subscribe to call events via the callService
-        if (sdk.callService?.subscribe) {
-          sdk.callService.subscribe((event) => {
-            console.log("[WebRTC] Call event:", event.name);
-            if (event.name === "callChanged" || event.name === "callUpdated") {
+        // Subscribe to call events from all available services
+        // The SDK v5 emits call events from multiple services
+        const subscribeToService = (name: string, service: unknown) => {
+          const svc = service as { subscribe?: (handler: (event: { name: string; data: unknown }) => void, eventName?: string) => { unsubscribe: () => void } } | undefined;
+          if (svc?.subscribe) {
+            svc.subscribe((event) => {
+              console.log(`[WebRTC] ${name} event:`, event.name, event.data);
               handleCallChanged(event.data as RainbowCall);
-            }
-          });
-          console.log("[WebRTC] Subscribed to call events");
-        } else {
-          console.warn("[WebRTC] callService not available — calls plugin may not be loaded");
+            });
+            console.log(`[WebRTC] Subscribed to ${name}`);
+            return true;
+          }
+          return false;
+        };
+
+        // Try multiple services — call events come from different places
+        const webrtcP2P = (sdk as unknown as Record<string, unknown>).webrtcP2PService;
+        const telephony = (sdk as unknown as Record<string, unknown>).telephonyService;
+
+        let subscribed = false;
+        subscribed = subscribeToService("webrtcP2PService", webrtcP2P) || subscribed;
+        subscribed = subscribeToService("telephonyService", telephony) || subscribed;
+        subscribed = subscribeToService("callService", sdk.callService) || subscribed;
+
+        if (!subscribed) {
+          console.warn("[WebRTC] No call service available for subscription");
+          // List all available services for debugging
+          console.log("[WebRTC] SDK instance keys:", Object.keys(sdk));
         }
 
         setStatus("logged_in");
