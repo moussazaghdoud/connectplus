@@ -470,82 +470,59 @@ export function useRainbowWebSDK(
         );
         console.log("[WebRTC] Available service-like properties:", serviceKeys);
 
-        // Subscribe to every service that has a subscribe method
+        // Subscribe to services for logging only (don't drive state from these)
         for (const key of serviceKeys) {
           try {
             const svc = sdkAny[key] as Record<string, unknown> | undefined;
             if (svc && typeof svc === "object" && typeof svc.subscribe === "function") {
               (svc.subscribe as Function)((event: { name: string; data: unknown }) => {
                 console.log(`[WebRTC] ${key} event:`, event.name);
-                if (event.data && typeof event.data === "object") {
-                  handleCallChanged(event.data as RainbowCall);
-                }
               });
-              console.log(`[WebRTC] Subscribed to ${key}`);
+              console.log(`[WebRTC] Subscribed to ${key} (logging)`);
             }
           } catch { /* skip inaccessible */ }
         }
 
-        // Poll: scan SDK for any call objects every 1.5s
+        // Poll getActiveCall() every second — sole driver of call state.
+        // Service events are unreliable (send conversation objects, not calls).
         const pollId = setInterval(() => {
           try {
-            // Try callService.getActiveCall()
             const cs = sdk.callService as unknown as Record<string, unknown> | undefined;
-            if (cs?.getActiveCall) {
-              const c = (cs.getActiveCall as Function)();
-              if (c && (c as Record<string, unknown>).id !== lastCallId) {
-                lastCallId = (c as Record<string, unknown>).id as string;
-                console.log("[WebRTC] Poll (getActiveCall):", c);
-                handleCallChanged(c as RainbowCall);
-                return;
+            if (!cs?.getActiveCall) return;
+
+            const call = (cs.getActiveCall as Function)() as Record<string, unknown> | null;
+
+            if (call && call.id) {
+              // Call exists
+              if (call.id !== lastCallId) {
+                // New call detected
+                lastCallId = call.id as string;
+                const status = String(call.status ?? call.state ?? "");
+                console.log("[WebRTC] Poll: NEW call:", {
+                  id: call.id,
+                  status,
+                  type: call.type,
+                  keys: Object.keys(call).slice(0, 20),
+                });
               }
+              // Always update state from the call object
+              handleCallChanged(call as unknown as RainbowCall);
+            } else if (lastCallId) {
+              // Call disappeared — mark ended
+              console.log("[WebRTC] Poll: call ended (no active call)");
+              lastCallId = "";
+              setCallState("ended");
+              setTimeout(() => {
+                setCallState("idle");
+                setCurrentCall(null);
+                rawCallRef.current = null;
+                reportedStatesRef.current.clear();
+              }, 4000);
             }
-
-            // Try webrtcP2P service calls array
-            for (const key of serviceKeys) {
-              const svc = sdkAny[key] as Record<string, unknown> | undefined;
-              if (!svc) continue;
-
-              // Look for getCalls, getActiveCalls, getRingingIncomingCalls, calls
-              for (const method of ["getCalls", "getActiveCalls", "getRingingIncomingCalls"]) {
-                if (typeof svc[method] === "function") {
-                  const calls = (svc[method] as Function)() as unknown[];
-                  if (calls?.length > 0) {
-                    const c = calls[0] as Record<string, unknown>;
-                    if (c.id !== lastCallId) {
-                      lastCallId = c.id as string;
-                      console.log(`[WebRTC] Poll (${key}.${method}):`, c);
-                      // Force ringing status
-                      if (!c.status) c.status = "ringing-incoming";
-                      handleCallChanged(c as unknown as RainbowCall);
-                      return;
-                    }
-                  }
-                }
-              }
-
-              // Check raw 'calls' property (Map or array)
-              if (svc.calls && typeof svc.calls === "object") {
-                const callsObj = svc.calls as Record<string, unknown> | Map<string, unknown>;
-                const entries = callsObj instanceof Map
-                  ? [...callsObj.values()]
-                  : Object.values(callsObj);
-                for (const c of entries) {
-                  const call = c as Record<string, unknown>;
-                  if (call?.id && call.id !== lastCallId) {
-                    lastCallId = call.id as string;
-                    console.log("[WebRTC] Poll (calls map):", call);
-                    if (!call.status) call.status = "ringing-incoming";
-                    handleCallChanged(call as unknown as RainbowCall);
-                    return;
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            // Don't break the poll on errors
+          } catch {
+            // Don't break the poll
           }
-        }, 1500);
+        }, 1000);
 
         (sdkAny as Record<string, unknown>)._callPollId = pollId;
         console.log("[WebRTC] Call monitoring started (poll + subscribe)");
