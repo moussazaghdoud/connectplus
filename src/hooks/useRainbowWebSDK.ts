@@ -476,11 +476,26 @@ export function useRainbowWebSDK(
 
           // Poll for active/ringing calls directly
           if (callSvc && typeof callSvc.getActiveCall === "function") {
-            const active = (callSvc.getActiveCall as () => RainbowCall | null)();
+            const active = (callSvc.getActiveCall as () => Record<string, unknown> | null)();
             if (active && active.id !== lastCallId) {
-              lastCallId = active.id;
-              console.log("[WebRTC] Poll: active call found:", active.id, active.status);
-              handleCallChanged(active);
+              lastCallId = active.id as string;
+              // Log the full call object to understand its shape
+              console.log("[WebRTC] Poll: call found:", JSON.stringify({
+                id: active.id,
+                status: active.status,
+                state: active.state,
+                type: active.type,
+                callerNumber: active.callerNumber,
+                callingPartyNumber: active.callingPartyNumber,
+                remotePartyNumber: active.remotePartyNumber,
+                displayName: active.displayName,
+                keys: Object.keys(active).slice(0, 20),
+              }));
+              // Force a recognizable status if the object doesn't have one
+              if (!active.status && !active.state) {
+                (active as Record<string, unknown>).status = "ringing-incoming";
+              }
+              handleCallChanged(active as unknown as RainbowCall);
             }
           }
 
