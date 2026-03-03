@@ -53,7 +53,16 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
   const body = await request.json();
   const input = ConfigureConnectorSchema.parse(body);
 
-  // Verify connector exists
+  // Verify connector exists — try to auto-load from DB if not in registry
+  if (!connectorRegistry.has(input.connectorId)) {
+    try {
+      const { dynamicLoader } = await import("@/lib/connectors/factory/dynamic-loader");
+      await dynamicLoader.reload(input.connectorId);
+    } catch {
+      // Ignore — will fail below if still not registered
+    }
+  }
+
   if (!connectorRegistry.has(input.connectorId)) {
     return NextResponse.json(
       {
