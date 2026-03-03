@@ -204,15 +204,15 @@ export function ScreenPopProvider() {
           return;
         }
 
-        // Check if SDK is loaded
-        if (!window.rainbowSDK) {
+        // Initialize SDK via dynamic import and login
+        await webrtc.initialize(data.webrtc.appId, data.webrtc.appSecret, data.webrtc.host);
+
+        if (webrtc.status === "error") {
           setRbStatus("error");
-          setRbError("Rainbow Web SDK not loaded. Place rainbow-sdk.min.js in public/lib/");
+          setRbError(webrtc.error || "SDK initialization failed");
           return;
         }
 
-        // Initialize and login via the Web SDK
-        await webrtc.initialize(data.webrtc.appId, data.webrtc.appSecret, data.webrtc.host);
         await webrtc.login(rbLogin, rbPassword);
 
         if (webrtc.error) {
@@ -342,7 +342,7 @@ export function ScreenPopProvider() {
     localStorage.setItem("connectplus_rb_mode", mode);
     // Proactively check mic permission when switching to WebRTC
     if (mode === "webrtc") {
-      webrtc.checkMicPermission();
+      webrtc.checkMicPermission().catch(() => {});
     }
   };
 

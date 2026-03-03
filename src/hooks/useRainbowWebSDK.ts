@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RainbowCall, RainbowCallStatus } from "@/types/rainbow-web-sdk";
+import type {
+  RainbowCall,
+  RainbowCallStatus,
+  RainbowSDKInstance,
+} from "@/types/rainbow-web-sdk";
 
 // ── Public types ─────────────────────────────────────────
 
@@ -88,8 +92,6 @@ function mapCallStatus(sdkStatus: RainbowCallStatus): CallState {
   }
 }
 
-// ── Hook ─────────────────────────────────────────────────
-
 // ── Helper: derive quality label from stats ──────────────
 
 function deriveQuality(stats: CallQualityStats): CallQualityStats["quality"] {
@@ -108,6 +110,8 @@ function deriveQuality(stats: CallQualityStats): CallQualityStats["quality"] {
   return "good";
 }
 
+// ── Hook ─────────────────────────────────────────────────
+
 export function useRainbowWebSDK(
   apiKey: string | null
 ): UseRainbowWebSDKReturn {
@@ -120,6 +124,7 @@ export function useRainbowWebSDK(
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rawCallRef = useRef<RainbowCall | null>(null);
+  const sdkRef = useRef<RainbowSDKInstance | null>(null);
   const qualityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Track whether we already reported each state to the server
@@ -180,16 +185,11 @@ export function useRainbowWebSDK(
       const call = rawCallRef.current;
       if (!call?.remoteMedia) return;
 
-      // Try to get RTCPeerConnection stats via the remote media stream
-      // The Rainbow SDK exposes remoteMedia as a MediaStream;
-      // we read stats from the audio receiver's RTCPeerConnection
       try {
         const audioTrack = call.remoteMedia.getAudioTracks()[0];
         if (!audioTrack) return;
 
-        // Access the peer connection through the SDK's internal reference
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pc = (call as any)._peerConnection as RTCPeerConnection | undefined;
+        const pc = call._peerConnection;
         if (!pc) return;
 
         const stats = await pc.getStats();
@@ -333,22 +333,30 @@ export function useRainbowWebSDK(
 
   const initialize = useCallback(
     async (appId: string, appSecret: string, host: string) => {
-      const sdk = window.rainbowSDK;
-      if (!sdk) {
-        setError("Rainbow Web SDK not loaded. Ensure the script tag is present.");
-        setStatus("error");
-        return;
-      }
-
       setStatus("initializing");
       setError(null);
 
       try {
-        await sdk.connection.initialize({
+        // Dynamic import of the ESM package (runs only in browser)
+        const rainbowModule = await import("rainbow-web-sdk");
+        const RainbowSDK = rainbowModule.RainbowSDK ?? rainbowModule.default;
+
+        if (!RainbowSDK?.create) {
+          throw new Error("Rainbow Web SDK module did not export RainbowSDK.create");
+        }
+
+        const instance = RainbowSDK.create({
           appID: appId,
           appSecret: appSecret,
           host,
         });
+
+        await instance.start();
+
+        sdkRef.current = instance;
+        // Also set on window for legacy compat / debugging
+        window.rainbowSDK = instance;
+
         setStatus("ready");
       } catch (err) {
         setStatus("error");
@@ -362,9 +370,9 @@ export function useRainbowWebSDK(
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const sdk = window.rainbowSDK;
+      const sdk = sdkRef.current;
       if (!sdk) {
-        setError("SDK not available");
+        setError("SDK not initialized. Call initialize() first.");
         setStatus("error");
         return;
       }
@@ -373,15 +381,14 @@ export function useRainbowWebSDK(
       const micOk = await requestMicAccess();
       if (!micOk) {
         setStatus("error");
-        // Error message already set by requestMicAccess
         return;
       }
 
       try {
-        await sdk.connection.signin(email, password);
+        await sdk.connectionService.signin(email, password);
 
-        // Subscribe to call events
-        sdk.webRTC.onWebRTCCallChanged(handleCallChanged);
+        // Subscribe to call events via the events system
+        sdk.events.on("callChanged", handleCallChanged as (...args: unknown[]) => void);
 
         setStatus("logged_in");
         setError(null);
@@ -396,16 +403,19 @@ export function useRainbowWebSDK(
   // ── Logout ─────────────────────────────────────────────
 
   const logout = useCallback(async () => {
-    const sdk = window.rainbowSDK;
-    if (!sdk) return;
-
+    const sdk = sdkRef.current;
     stopQualityPolling();
 
-    try {
-      await sdk.connection.signout();
-    } catch {
-      // Ignore signout errors
+    if (sdk) {
+      try {
+        await sdk.stop();
+      } catch {
+        // Ignore stop errors
+      }
     }
+
+    sdkRef.current = null;
+    window.rainbowSDK = undefined;
 
     setStatus("idle");
     setCallState("idle");
@@ -417,44 +427,44 @@ export function useRainbowWebSDK(
   // ── Call control ───────────────────────────────────────
 
   const answer = useCallback(() => {
-    const sdk = window.rainbowSDK;
+    const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.webRTC.answerInAudio(call);
+    sdk.callService.answerInAudio(call);
   }, []);
 
   const reject = useCallback(() => {
-    const sdk = window.rainbowSDK;
+    const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.webRTC.reject(call);
+    sdk.callService.reject(call);
   }, []);
 
   const hangup = useCallback(() => {
-    const sdk = window.rainbowSDK;
+    const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.webRTC.release(call);
+    sdk.callService.release(call);
   }, []);
 
   const toggleMute = useCallback(() => {
-    const sdk = window.rainbowSDK;
+    const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
-    sdk.webRTC.muteCall(call, !call.isMuted);
+    sdk.callService.muteCall(call, !call.isMuted);
     setCurrentCall((prev) =>
       prev ? { ...prev, isMuted: !prev.isMuted } : null
     );
   }, []);
 
   const toggleHold = useCallback(() => {
-    const sdk = window.rainbowSDK;
+    const sdk = sdkRef.current;
     const call = rawCallRef.current;
     if (!sdk || !call) return;
     if (call.isOnHold) {
-      sdk.webRTC.retrieveCall(call);
+      sdk.callService.retrieveCall(call);
     } else {
-      sdk.webRTC.holdCall(call);
+      sdk.callService.holdCall(call);
     }
     setCurrentCall((prev) =>
       prev ? { ...prev, isOnHold: !prev.isOnHold } : null
@@ -466,9 +476,9 @@ export function useRainbowWebSDK(
   useEffect(() => {
     return () => {
       stopQualityPolling();
-      const sdk = window.rainbowSDK;
-      if (sdk && status === "logged_in") {
-        sdk.connection.signout().catch(() => {});
+      const sdk = sdkRef.current;
+      if (sdk) {
+        sdk.stop().catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
