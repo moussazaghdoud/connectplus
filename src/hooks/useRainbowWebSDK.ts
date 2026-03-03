@@ -503,7 +503,7 @@ export function useRainbowWebSDK(
                   // Subscribe to call-level events for status updates
                   if (typeof call.subscribe === "function") {
                     (call.subscribe as Function)((ce: { name: string }) => {
-                      const c = conv.call as Record<string, unknown> | undefined;
+                      const c = conv?.call as Record<string, unknown> | undefined;
                       if (!c) return;
                       const sv = c.callStatus ?? c.status ?? "";
                       const rs = typeof sv === "object" ? String((sv as Record<string, unknown>).value ?? "") : String(sv);
