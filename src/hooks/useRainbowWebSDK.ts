@@ -73,9 +73,10 @@ export interface UseRainbowWebSDKReturn {
 
 function mapCallStatus(sdkStatus: string): CallState {
   const s = (sdkStatus || "").toLowerCase().replace(/_/g, "-");
+  if (s === "incommingcall" || s === "incomingcall") return "ringing_incoming";
   if (s.includes("ringing") && (s.includes("incom") || s.includes("incom"))) return "ringing_incoming";
   if (s.includes("ringing") && s.includes("out")) return "ringing_outgoing";
-  if (s.includes("ringing")) return "ringing_incoming"; // default ringing = incoming
+  if (s.includes("ringing")) return "ringing_incoming";
   if (s.includes("connecting") || s.includes("dialing")) return "connecting";
   if (s.includes("active") || s.includes("answered") || s.includes("connected")) return "active";
   if (s.includes("hold") || s.includes("held")) return "on_hold";
@@ -595,53 +596,72 @@ export function useRainbowWebSDK(
     const callAny = call as unknown as Record<string, unknown>;
     const sdkAny = sdk as unknown as Record<string, unknown>;
 
-    console.log("[WebRTC] Call object keys:", Object.keys(callAny).slice(0, 20));
-    console.log("[WebRTC] Call status:", callAny.status, "| type:", callAny.type);
+    console.log("[WebRTC] Call keys:", Object.keys(callAny));
+    console.log("[WebRTC] Call status:", JSON.stringify(callAny.status), "| type:", JSON.stringify(callAny.type));
 
-    // For SipWise/media pillar: telephonyService handles the actual answer.
-    // callService.answerCall silently fails for these call types.
-    // Try telephonyService FIRST, then callService as fallback.
+    // Scan ALL SDK services for answer-like methods
+    const allKeys = new Set<string>();
+    let p = Object.getPrototypeOf(sdk);
+    while (p && p !== Object.prototype) {
+      Object.getOwnPropertyNames(p).forEach(k => allKeys.add(k));
+      p = Object.getPrototypeOf(p);
+    }
+    Object.keys(sdk).forEach(k => allKeys.add(k));
 
-    // 1. telephonyService.answerCall (SipWise/media pillar)
-    try {
-      const tel = sdkAny.telephonyService as Record<string, unknown> | undefined;
-      if (tel?.answerCall) {
-        console.log("[WebRTC] Trying telephonyService.answerCall");
-        const r = (tel.answerCall as Function)(call);
-        if (r?.then) (r as Promise<void>).then(
-          () => console.log("[WebRTC] telephonyService.answerCall OK"),
-          (e: unknown) => console.error("[WebRTC] telephonyService.answerCall rejected:", e)
-        );
-        return;
-      }
-    } catch (e) { console.error("[WebRTC] telephonyService.answerCall threw:", e); }
+    let answered = false;
 
-    // 2. callService.answerCall (standard WebRTC P2P)
-    try {
-      if (sdk.callService?.answerCall) {
-        console.log("[WebRTC] Trying callService.answerCall");
-        sdk.callService.answerCall(call, false).then(
-          () => console.log("[WebRTC] callService.answerCall OK"),
-          (e: unknown) => console.error("[WebRTC] callService.answerCall rejected:", e)
-        );
-        return;
-      }
-    } catch (e) { console.error("[WebRTC] callService.answerCall threw:", e); }
+    for (const key of allKeys) {
+      if (answered) break;
+      try {
+        const svc = sdkAny[key];
+        if (!svc || typeof svc !== "object") continue;
+        const svcObj = svc as Record<string, unknown>;
 
-    // 3. Call object's own method
-    try {
-      for (const method of ["answer", "accept", "answerInAudio"]) {
+        // Look for answerCall method on each service
+        if (typeof svcObj.answerCall === "function" && key !== "callService") {
+          console.log(`[WebRTC] Trying ${key}.answerCall`);
+          try {
+            const r = (svcObj.answerCall as Function)(call);
+            if (r?.then) {
+              (r as Promise<void>).then(
+                () => console.log(`[WebRTC] ${key}.answerCall OK`),
+                (e: unknown) => console.warn(`[WebRTC] ${key}.answerCall rejected:`, e)
+              );
+            }
+            answered = true;
+          } catch (e) { console.warn(`[WebRTC] ${key}.answerCall threw:`, e); }
+        }
+      } catch { /* skip */ }
+    }
+
+    // Try call object's own methods
+    if (!answered) {
+      for (const method of ["answer", "accept", "answerInAudio", "answerCall"]) {
         if (typeof callAny[method] === "function") {
           console.log(`[WebRTC] Trying call.${method}()`);
-          (callAny[method] as Function)();
-          return;
+          try {
+            const r = (callAny[method] as Function)();
+            if (r?.then) {
+              (r as Promise<void>).then(
+                () => console.log(`[WebRTC] call.${method}() OK`),
+                (e: unknown) => console.warn(`[WebRTC] call.${method}() rejected:`, e)
+              );
+            }
+            answered = true;
+            break;
+          } catch (e) { console.warn(`[WebRTC] call.${method}() threw:`, e); }
         }
       }
-    } catch (e) { console.error("[WebRTC] call method failed:", e); }
+    }
 
-    console.error("[WebRTC] No answer method worked. Available on telephonyService:",
-      Object.getOwnPropertyNames(Object.getPrototypeOf(sdkAny.telephonyService || {}))
-        .filter(m => /answer|accept|call/i.test(m)));
+    // Last resort: callService (may reject for SipWise but try anyway)
+    if (!answered) {
+      console.log("[WebRTC] Fallback: callService.answerCall");
+      sdk.callService.answerCall(call, false).then(
+        () => console.log("[WebRTC] callService.answerCall OK"),
+        (e: unknown) => console.error("[WebRTC] All answer methods failed. Last:", e)
+      );
+    }
   }, []);
 
   const reject = useCallback(() => {
