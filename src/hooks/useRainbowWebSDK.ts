@@ -350,15 +350,15 @@ export function useRainbowWebSDK(
           throw new Error("Rainbow Web SDK module did not export RainbowSDK.create");
         }
 
-        // Resolve plugin classes from the module
-        const CallsPlugin = rainbowModule.CallsPlugin as { initialize?: () => unknown } | undefined;
-        const TelephonyPlugin = rainbowModule.TelephonyPlugin as { initialize?: () => unknown } | undefined;
+        // Resolve plugin classes from the module — pass them directly
+        const CallsPlugin = rainbowModule.CallsPlugin;
+        const TelephonyPlugin = rainbowModule.TelephonyPlugin;
 
         const plugins: unknown[] = [];
-        if (CallsPlugin?.initialize) plugins.push(CallsPlugin.initialize());
-        if (TelephonyPlugin?.initialize) plugins.push(TelephonyPlugin.initialize());
+        if (CallsPlugin) plugins.push(CallsPlugin);
+        if (TelephonyPlugin) plugins.push(TelephonyPlugin);
 
-        console.log("[WebRTC] Plugins loaded:", plugins.length, { hasCalls: !!CallsPlugin, hasTelephony: !!TelephonyPlugin });
+        console.log("[WebRTC] Plugins:", plugins.length, { hasCalls: !!CallsPlugin, hasTelephony: !!TelephonyPlugin });
 
         // The SDK prepends https:// itself, so only pass the hostname.
         const serverURL = host === "official" ? "openrainbow.com"
