@@ -344,13 +344,22 @@ export function useRainbowWebSDK(
         const rainbowModule = await (Function(`return import("${CDN_URL}")`)() as Promise<Record<string, unknown>>);
         const RainbowSDK = (rainbowModule.RainbowSDK ?? rainbowModule.default) as { create?: (config: Record<string, string>) => RainbowSDKInstance };
 
-        console.log("[WebRTC] SDK module keys:", Object.keys(rainbowModule));
+        console.log("[WebRTC] SDK module keys:", Object.keys(rainbowModule).filter(k => /plugin|call|telephony|sdk/i.test(k)));
 
         if (!RainbowSDK?.create) {
-          throw new Error("Rainbow Web SDK module did not export RainbowSDK.create. Keys: " + Object.keys(rainbowModule).join(", "));
+          throw new Error("Rainbow Web SDK module did not export RainbowSDK.create");
         }
 
-        // Map short host names to Rainbow server hostnames.
+        // Resolve plugin classes from the module
+        const CallsPlugin = rainbowModule.CallsPlugin as { initialize?: () => unknown } | undefined;
+        const TelephonyPlugin = rainbowModule.TelephonyPlugin as { initialize?: () => unknown } | undefined;
+
+        const plugins: unknown[] = [];
+        if (CallsPlugin?.initialize) plugins.push(CallsPlugin.initialize());
+        if (TelephonyPlugin?.initialize) plugins.push(TelephonyPlugin.initialize());
+
+        console.log("[WebRTC] Plugins loaded:", plugins.length, { hasCalls: !!CallsPlugin, hasTelephony: !!TelephonyPlugin });
+
         // The SDK prepends https:// itself, so only pass the hostname.
         const serverURL = host === "official" ? "openrainbow.com"
           : host === "sandbox" ? "sandbox.openrainbow.com"
@@ -362,6 +371,7 @@ export function useRainbowWebSDK(
             applicationId: appId,
             secretKey: appSecret,
           },
+          plugins,
           autoLogin: false,
         } as never);
 
@@ -409,13 +419,20 @@ export function useRainbowWebSDK(
         console.log("[WebRTC] Attempting logon for:", email);
 
         await sdk.connectionService.logon(email, password, false);
+        console.log("[WebRTC] Login successful");
 
         // Subscribe to call events via the callService
-        sdk.callService.subscribe((event) => {
-          if (event.name === "callChanged" || event.name === "callUpdated") {
-            handleCallChanged(event.data as RainbowCall);
-          }
-        });
+        if (sdk.callService?.subscribe) {
+          sdk.callService.subscribe((event) => {
+            console.log("[WebRTC] Call event:", event.name);
+            if (event.name === "callChanged" || event.name === "callUpdated") {
+              handleCallChanged(event.data as RainbowCall);
+            }
+          });
+          console.log("[WebRTC] Subscribed to call events");
+        } else {
+          console.warn("[WebRTC] callService not available — calls plugin may not be loaded");
+        }
 
         setStatus("logged_in");
         setError(null);
