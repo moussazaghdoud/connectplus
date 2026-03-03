@@ -53,27 +53,23 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
   const body = await request.json();
   const input = ConfigureConnectorSchema.parse(body);
 
-  // Verify connector exists — try to auto-load from DB if not in registry
+  // Verify connector exists — check registry OR DB definitions
   if (!connectorRegistry.has(input.connectorId)) {
-    try {
-      const { dynamicLoader } = await import("@/lib/connectors/factory/dynamic-loader");
-      await dynamicLoader.reload(input.connectorId);
-    } catch {
-      // Ignore — will fail below if still not registered
-    }
-  }
-
-  if (!connectorRegistry.has(input.connectorId)) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "CONNECTOR_NOT_FOUND",
-          message: `Connector '${input.connectorId}' is not registered`,
-          available: connectorRegistry.listIds(),
+    const dbDef = await prisma.connectorDefinition.findUnique({
+      where: { slug: input.connectorId },
+    });
+    if (!dbDef) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CONNECTOR_NOT_FOUND",
+            message: `Connector '${input.connectorId}' not found in registry or definitions`,
+            available: connectorRegistry.listIds(),
+          },
         },
-      },
-      { status: 404 }
-    );
+        { status: 404 }
+      );
+    }
   }
 
   // Encrypt credentials
