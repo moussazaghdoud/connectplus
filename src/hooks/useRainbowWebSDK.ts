@@ -620,8 +620,7 @@ export function useRainbowWebSDK(
     try {
       if (sdk.callService?.answerCall) {
         console.log("[WebRTC] Trying callService.answerCall");
-        const r = sdk.callService.answerCall(call, false);
-        if (r?.then) (r as Promise<void>).then(
+        sdk.callService.answerCall(call, false).then(
           () => console.log("[WebRTC] callService.answerCall OK"),
           (e: unknown) => console.error("[WebRTC] callService.answerCall rejected:", e)
         );
