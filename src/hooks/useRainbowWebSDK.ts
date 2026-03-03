@@ -587,7 +587,7 @@ export function useRainbowWebSDK(
 
   // ── Call control ───────────────────────────────────────
 
-  const answer = useCallback(() => {
+  const answer = useCallback(async () => {
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
     console.log("[WebRTC] Answer clicked", { sdk: !!sdk, call: !!call, callId: call?.id });
