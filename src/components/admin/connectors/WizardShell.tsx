@@ -7,6 +7,7 @@ import { ContactSearchStep } from "./steps/ContactSearchStep";
 import { WriteBackStep } from "./steps/WriteBackStep";
 import { WebhookStep } from "./steps/WebhookStep";
 import { TestActivateStep } from "./steps/TestActivateStep";
+import { ConnectAccountStep } from "./steps/ConnectAccountStep";
 
 const STEPS = [
   { id: 1, label: "Basic Info", component: BasicInfoStep },
@@ -15,6 +16,7 @@ const STEPS = [
   { id: 4, label: "Write-Back", component: WriteBackStep },
   { id: 5, label: "Webhooks", component: WebhookStep },
   { id: 6, label: "Test & Activate", component: TestActivateStep },
+  { id: 7, label: "Connect", component: ConnectAccountStep },
 ];
 
 export interface WizardState {
