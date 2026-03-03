@@ -277,46 +277,70 @@ export function useRainbowWebSDK(
 
   const handleCallChanged = useCallback(
     (call: RainbowCall) => {
-      rawCallRef.current = call;
+      // v5 SDK events may send Conversation objects instead of Call objects.
+      // Extract the actual call from nested structures.
+      const data = call as unknown as Record<string, unknown>;
+      const actualCall = (
+        (data.call as Record<string, unknown>) ??         // { call: CallRB }
+        (data.activeCall as Record<string, unknown>) ??   // { activeCall: CallRB }
+        (data.webrtcCall as Record<string, unknown>) ??   // { webrtcCall: CallRB }
+        data                                               // direct call object
+      );
 
-      // v5 SDK may use different property names and status formats
-      const callAny = call as unknown as Record<string, unknown>;
-      const rawStatus = (callAny.status ?? callAny.state ?? "") as string;
-      const newState = mapCallStatus(rawStatus);
+      rawCallRef.current = actualCall as unknown as RainbowCall;
+
+      const rawStatus = (
+        (actualCall.status as string) ??
+        (actualCall.state as string) ??
+        (actualCall.callStatus as string) ??
+        (data.status as string) ??
+        ""
+      );
+
+      // If no status found but we have an id, assume ringing
+      let newState = mapCallStatus(rawStatus);
+      if (newState === "idle" && (actualCall.id || data.id)) {
+        newState = "ringing_incoming";
+      }
+
       const callerNumber =
-        (callAny.callerNumber as string) ??
-        (callAny.callingPartyNumber as string) ??
-        (callAny.remotePartyNumber as string) ??
-        call.contact?.phoneNumbers?.[0]?.number ??
-        (callAny.displayName as string) ??
+        (actualCall.callerNumber as string) ??
+        (actualCall.callingPartyNumber as string) ??
+        (actualCall.remotePartyNumber as string) ??
+        (actualCall.displayName as string) ??
+        ((actualCall.contact as Record<string, unknown>)?.phoneNumbers as Array<{number: string}>)?.[0]?.number ??
+        (data.callerNumber as string) ??
         "";
 
-      console.log("[WebRTC] Call state change:", { id: call.id, rawStatus, mapped: newState, caller: callerNumber });
+      const callId = (actualCall.id as string) ?? (data.id as string) ?? `call-${Date.now()}`;
+
+      console.log("[WebRTC] Call state change:", { callId, rawStatus, mapped: newState, caller: callerNumber, keys: Object.keys(actualCall).slice(0, 15) });
 
       setCallState(newState);
       setCurrentCall({
-        callId: call.id,
+        callId,
         callerNumber,
         state: newState,
-        isMuted: call.isMuted,
-        isOnHold: call.isOnHold,
+        isMuted: !!(actualCall.isMuted ?? actualCall.muted),
+        isOnHold: !!(actualCall.isOnHold ?? actualCall.held),
         startedAt:
           newState === "active" ? Date.now() : null,
       });
 
       // Attach remote audio when call becomes active
-      if (newState === "active" && call.remoteMedia) {
-        attachRemoteAudio(call.remoteMedia);
+      const remoteMedia = (actualCall.remoteMedia ?? actualCall.remoteStream) as MediaStream | undefined;
+      if (newState === "active" && remoteMedia) {
+        attachRemoteAudio(remoteMedia);
         startQualityPolling();
       }
 
       // Forward events to server
       if (newState === "ringing_incoming") {
-        reportCallEvent(call.id, "ringing_incoming", callerNumber);
+        reportCallEvent(callId, "ringing_incoming", callerNumber);
       } else if (newState === "active") {
-        reportCallEvent(call.id, "active", callerNumber);
+        reportCallEvent(callId, "active", callerNumber);
       } else if (newState === "ended") {
-        reportCallEvent(call.id, "ended", callerNumber);
+        reportCallEvent(callId, "ended", callerNumber);
         stopQualityPolling();
         // Clear call after a brief delay so UI can show "Call Ended"
         setTimeout(() => {
