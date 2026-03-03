@@ -387,7 +387,10 @@ export function useRainbowWebSDK(
         setStatus("ready");
       } catch (err) {
         setStatus("error");
-        setError(err instanceof Error ? err.message : "SDK initialization failed");
+        const msg = err instanceof Error ? err.message : "SDK initialization failed";
+        setError(msg);
+        // Re-throw so callers can catch it
+        throw err;
       }
     },
     []
@@ -397,11 +400,14 @@ export function useRainbowWebSDK(
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const sdk = sdkRef.current;
+      let sdk = sdkRef.current;
+
+      // If SDK wasn't initialized yet (e.g. initialize threw), bail with clear error
       if (!sdk) {
-        setError("SDK not initialized. Call initialize() first.");
+        const errMsg = "SDK not initialized — check browser console for initialization errors.";
+        setError(errMsg);
         setStatus("error");
-        return;
+        throw new Error(errMsg);
       }
 
       // Check microphone access before login

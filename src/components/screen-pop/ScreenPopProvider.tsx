@@ -205,22 +205,15 @@ export function ScreenPopProvider() {
         }
 
         // Initialize SDK via dynamic import and login
-        await webrtc.initialize(data.webrtc.appId, data.webrtc.appSecret, data.webrtc.host);
-
-        if (webrtc.status === "error") {
-          setRbStatus("error");
-          setRbError(webrtc.error || "SDK initialization failed");
-          return;
-        }
-
-        await webrtc.login(rbLogin, rbPassword);
-
-        if (webrtc.error) {
-          setRbStatus("error");
-          setRbError(webrtc.error);
-        } else {
+        try {
+          await webrtc.initialize(data.webrtc.appId, data.webrtc.appSecret, data.webrtc.host);
+          await webrtc.login(rbLogin, rbPassword);
           setRbStatus("connected");
           setRbConnectedAs(rbLogin);
+        } catch (initErr) {
+          setRbStatus("error");
+          setRbError(initErr instanceof Error ? initErr.message : "WebRTC connection failed");
+          return;
         }
       } else {
         // S2S mode: start server-side worker
