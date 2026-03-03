@@ -478,7 +478,7 @@ export function useRainbowWebSDK(
                   const state = mapped === "idle" ? "ringing_incoming" : mapped;
                   const contact = call.contact as Record<string, unknown> | undefined;
                   const caller = String(contact?.displayName ?? call.callerNumber ?? "");
-                  const cid = String(call.id ?? conv.id ?? `call-${Date.now()}`);
+                  const cid = String(call.id ?? conv?.id ?? `call-${Date.now()}`);
 
                   console.log("[WebRTC] NEW CALL via conversation:", {
                     id: cid, rawStatus, state, caller,
