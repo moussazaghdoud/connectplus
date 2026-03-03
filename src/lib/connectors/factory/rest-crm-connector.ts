@@ -1,0 +1,267 @@
+/**
+ * RestCrmConnector — a config-driven implementation of ConnectorInterface.
+ * Handles 80% of CRM integrations with zero custom code.
+ */
+
+import type {
+  ConnectorInterface,
+  ConnectorManifest,
+  TenantConnectorConfig,
+  TokenPair,
+  ConnectorEvent,
+  ConnectorEventType,
+  HealthStatus,
+} from "../../core/connector-interface";
+import type { CanonicalContact, ContactSearchQuery, ExternalContact } from "../../core/models/contact";
+import type { Interaction } from "../../../prisma-types";
+import type { ConnectorDefinitionConfig } from "./types";
+import { buildAuthHeaders, buildOAuth2AuthUrl, exchangeOAuth2Token } from "./auth-handler";
+import { verifyWebhookSignature } from "./webhook-verifier";
+import { getByPath, resolveField, applyTemplate, mapContactFields } from "./field-mapper";
+import { validateUrl, resolveEndpoint } from "./url-validator";
+import { fetchWithRetry } from "../../utils/http";
+import { logger } from "../../observability/logger";
+
+export class RestCrmConnector implements ConnectorInterface {
+  readonly manifest: ConnectorManifest;
+  private def: ConnectorDefinitionConfig;
+  private config: TenantConnectorConfig | null = null;
+
+  constructor(
+    slug: string,
+    name: string,
+    version: string,
+    def: ConnectorDefinitionConfig
+  ) {
+    this.def = def;
+    this.manifest = {
+      id: slug,
+      name,
+      version,
+      authType: def.auth.type,
+      webhookSupported: !!def.webhook,
+      capabilities: this.deriveCapabilities(),
+    };
+  }
+
+  private deriveCapabilities() {
+    const caps: ConnectorManifest["capabilities"] = ["contact_search"];
+    if (this.def.writeBack) caps.push("interaction_writeback");
+    return caps;
+  }
+
+  async initialize(config: TenantConnectorConfig): Promise<void> {
+    this.config = config;
+  }
+
+  // ── OAuth2 ─────────────────────────────────────────────
+
+  getAuthUrl(tenantId: string, redirectUri: string): string {
+    if (this.def.auth.type !== "oauth2") {
+      throw new Error(`${this.manifest.id} does not use OAuth2`);
+    }
+    const clientId = this.config?.credentials.clientId ?? "";
+    return buildOAuth2AuthUrl(this.def.auth, clientId, redirectUri, tenantId);
+  }
+
+  async exchangeToken(tenantId: string, code: string): Promise<TokenPair> {
+    if (this.def.auth.type !== "oauth2") {
+      throw new Error(`${this.manifest.id} does not use OAuth2`);
+    }
+    const creds = this.config?.credentials ?? {};
+    return exchangeOAuth2Token(
+      this.def.auth,
+      creds.clientId ?? "",
+      creds.clientSecret ?? "",
+      creds.redirectUri ?? "",
+      code
+    );
+  }
+
+  // ── Contact Search ─────────────────────────────────────
+
+  async searchContacts(query: ContactSearchQuery): Promise<ExternalContact[]> {
+    const creds = this.config?.credentials ?? {};
+    const headers = {
+      ...buildAuthHeaders(this.def.auth, creds),
+      "Content-Type": "application/json",
+    };
+
+    const searchConf = this.def.contactSearch;
+    const url = resolveEndpoint(this.def.apiBaseUrl, searchConf.endpoint);
+
+    const validation = validateUrl(url);
+    if (!validation.valid) {
+      throw new Error(`URL validation failed: ${validation.error}`);
+    }
+
+    const queryStr = query.query ?? query.email ?? query.phone ?? "";
+    let resp: Response;
+
+    if (searchConf.method === "POST") {
+      const bodyTemplate = searchConf.request.bodyTemplate ?? '{"query":"{{query}}"}';
+      const body = applyTemplate(bodyTemplate, {
+        query: queryStr,
+        email: query.email ?? "",
+        phone: query.phone ?? "",
+      });
+      resp = await fetchWithRetry(url, { method: "POST", headers, body });
+    } else {
+      const params = new URLSearchParams();
+      for (const [key, tmpl] of Object.entries(searchConf.request.queryParams ?? {})) {
+        params.set(key, applyTemplate(tmpl, {
+          query: queryStr,
+          email: query.email ?? "",
+          phone: query.phone ?? "",
+        }));
+      }
+      resp = await fetchWithRetry(`${url}?${params.toString()}`, { method: "GET", headers });
+    }
+
+    if (!resp.ok) {
+      logger.warn({ status: resp.status, connector: this.manifest.id }, "Contact search failed");
+      return [];
+    }
+
+    const data = await resp.json();
+    const results = getByPath(data, searchConf.response.resultsPath) as unknown[];
+
+    if (!Array.isArray(results)) return [];
+
+    return results.map((item) => {
+      const obj = item as Record<string, unknown>;
+      const idField = searchConf.response.idField;
+      return {
+        externalId: String(getByPath(obj, idField) ?? ""),
+        source: this.manifest.id,
+        rawData: obj,
+      } as ExternalContact;
+    });
+  }
+
+  mapContact(externalContact: ExternalContact): CanonicalContact {
+    const raw = externalContact.rawData as Record<string, unknown>;
+    const mapped = mapContactFields(raw, this.def.contactFieldMapping as unknown as Record<string, string | undefined>);
+
+    return {
+      displayName: mapped.displayName || `Contact ${externalContact.externalId}`,
+      email: mapped.email || undefined,
+      phone: mapped.phone || undefined,
+      company: mapped.company || undefined,
+      title: mapped.title || undefined,
+      externalId: externalContact.externalId,
+      source: this.manifest.id,
+      metadata: { raw: externalContact.rawData },
+    };
+  }
+
+  // ── Webhooks ───────────────────────────────────────────
+
+  verifyWebhook(headers: Record<string, string>, body: string | Buffer): boolean {
+    if (!this.def.webhook) return false;
+    const secret = this.config?.credentials.webhookSecret ?? this.config?.credentials.clientSecret ?? "";
+    return verifyWebhookSignature(this.def.webhook, secret, headers, typeof body === "string" ? body : body.toString());
+  }
+
+  parseWebhook(headers: Record<string, string>, body: unknown): ConnectorEvent {
+    const webhook = this.def.webhook;
+    if (!webhook) throw new Error(`${this.manifest.id} does not support webhooks`);
+
+    const payload = body as Record<string, unknown>;
+    const eventTypeRaw = String(getByPath(payload, webhook.eventTypeField) ?? "custom");
+    const eventType = (webhook.eventTypeMapping[eventTypeRaw] ?? "custom") as ConnectorEventType;
+    const externalId = String(getByPath(payload, webhook.externalIdField) ?? "");
+    const idempotencyKey = webhook.idempotencyKeyField
+      ? String(getByPath(payload, webhook.idempotencyKeyField) ?? `${this.manifest.id}_${Date.now()}`)
+      : `${this.manifest.id}_${Date.now()}`;
+
+    return {
+      type: eventType,
+      externalId,
+      connectorId: this.manifest.id,
+      payload,
+      idempotencyKey,
+    };
+  }
+
+  // ── Write-Back ─────────────────────────────────────────
+
+  async writeBack(interaction: Interaction, config: TenantConnectorConfig): Promise<void> {
+    if (!this.def.writeBack) return;
+
+    const headers = {
+      ...buildAuthHeaders(this.def.auth, config.credentials),
+      "Content-Type": "application/json",
+    };
+
+    const wb = this.def.writeBack;
+    const url = resolveEndpoint(this.def.apiBaseUrl, wb.endpoint);
+    const body = applyTemplate(wb.bodyTemplate, { interaction: interaction as unknown as Record<string, unknown> });
+
+    const resp = await fetchWithRetry(url, {
+      method: wb.method,
+      headers,
+      body,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`Write-back failed: HTTP ${resp.status} ${text}`);
+    }
+
+    // Associate with contact if configured
+    if (wb.associateContact && interaction.externalId) {
+      const respData = await resp.json().catch(() => ({}));
+      const writeBackId = (respData as Record<string, unknown>).id ?? "";
+      const assocUrl = resolveEndpoint(
+        this.def.apiBaseUrl,
+        applyTemplate(wb.associateContact.endpoint, {
+          writeBackId: String(writeBackId),
+          externalId: interaction.externalId,
+        })
+      );
+      const assocBody = wb.associateContact.bodyTemplate
+        ? applyTemplate(wb.associateContact.bodyTemplate, {
+            writeBackId: String(writeBackId),
+            externalId: interaction.externalId,
+          })
+        : undefined;
+
+      await fetchWithRetry(assocUrl, {
+        method: wb.associateContact.method,
+        headers,
+        body: assocBody,
+      });
+    }
+  }
+
+  // ── Health Check ───────────────────────────────────────
+
+  async healthCheck(config: TenantConnectorConfig): Promise<HealthStatus> {
+    const hc = this.def.healthCheck ?? { endpoint: "/", method: "GET" as const };
+    const url = resolveEndpoint(this.def.apiBaseUrl, hc.endpoint);
+    const headers = buildAuthHeaders(this.def.auth, config.credentials);
+    const expectedStatus = hc.expectedStatus ?? 200;
+    const start = Date.now();
+
+    try {
+      const resp = await fetchWithRetry(url, {
+        method: hc.method ?? "GET",
+        headers,
+      });
+      const latencyMs = Date.now() - start;
+
+      return {
+        healthy: resp.status === expectedStatus,
+        latencyMs,
+        message: resp.status === expectedStatus ? "OK" : `Unexpected status: ${resp.status}`,
+      };
+    } catch (err) {
+      return {
+        healthy: false,
+        latencyMs: Date.now() - start,
+        message: err instanceof Error ? err.message : "Health check failed",
+      };
+    }
+  }
+}

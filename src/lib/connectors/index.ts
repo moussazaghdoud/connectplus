@@ -139,8 +139,19 @@ function setupEventListeners() {
 
 // ── Initialization ──────────────────────────────────────
 
-export function initializeConnectors(): void {
+export async function initializeConnectors(): Promise<void> {
   setupEventListeners();
+
+  // Load config-driven connectors from DB (after static registration)
+  try {
+    const { dynamicLoader } = await import("./factory/dynamic-loader");
+    const dynamicCount = await dynamicLoader.loadAll();
+    if (dynamicCount > 0) {
+      logger.info({ count: dynamicCount }, "Dynamic connectors loaded from DB");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Dynamic connector loading skipped");
+  }
 
   const count = connectorRegistry.size;
   const ids = connectorRegistry.listIds();
