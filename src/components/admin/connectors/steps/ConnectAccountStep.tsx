@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { WizardState } from "../WizardShell";
 
 interface StepProps {
@@ -9,11 +9,15 @@ interface StepProps {
   apiKey: string;
 }
 
+interface CredentialStatus {
+  configured: boolean;
+  hasTokens: boolean;
+}
+
 export function ConnectAccountStep({ state, apiKey }: StepProps) {
   const slug = state.savedSlug;
   const authType = ((state.config.auth as Record<string, unknown>)?.type as string) ?? "api_key";
 
-  // Credential fields based on auth type
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [redirectUri, setRedirectUri] = useState(
@@ -24,6 +28,22 @@ export function ConnectAccountStep({ state, apiKey }: StepProps) {
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [credStatus, setCredStatus] = useState<CredentialStatus | null>(null);
+
+  // Check if credentials already exist
+  useEffect(() => {
+    if (!slug || !apiKey) return;
+    fetch("/api/v1/admin/connectors", { headers: { "x-api-key": apiKey } })
+      .then((r) => r.json())
+      .then((data) => {
+        const conn = (data.data as Array<{ id: string; configured: boolean; enabled: boolean }> | undefined)
+          ?.find((c: Record<string, unknown>) => c.id === slug || (c as Record<string, unknown>).connectorId === slug);
+        if (conn?.configured) {
+          setCredStatus({ configured: true, hasTokens: false });
+        }
+      })
+      .catch(() => {});
+  }, [slug, apiKey]);
 
   const save = async () => {
     if (!slug) { setResult({ ok: false, message: "Connector not saved yet" }); return; }
@@ -64,6 +84,21 @@ export function ConnectAccountStep({ state, apiKey }: StepProps) {
       <p className="text-sm text-gray-500">
         Enter your <span className="font-medium">{state.name}</span> credentials. These are encrypted and stored per-tenant.
       </p>
+
+      {credStatus?.configured && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-500" />
+          Credentials already saved. Fill in below only to update them.
+        </div>
+      )}
+
+      {authType === "oauth2" && credStatus?.configured && (
+        <a href={`/api/v1/auth/${slug}?key=${apiKey}`}
+          target="_blank" rel="noopener noreferrer"
+          className="inline-block px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded hover:bg-purple-700">
+          Connect to {state.name} (OAuth Login)
+        </a>
+      )}
 
       {!slug && (
         <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
