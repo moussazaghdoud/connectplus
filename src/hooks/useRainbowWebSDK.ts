@@ -337,9 +337,11 @@ export function useRainbowWebSDK(
       setError(null);
 
       try {
-        // Dynamic import of the ESM package (runs only in browser)
-        const rainbowModule = await import("rainbow-web-sdk");
-        const RainbowSDK = rainbowModule.RainbowSDK ?? rainbowModule.default;
+        // Dynamic import hidden from Turbopack static analysis so the 6MB
+        // browser-only SDK is not bundled into the server build.
+        const moduleName = "rainbow-web-sdk";
+        const rainbowModule = await (Function(`return import("${moduleName}")`)() as Promise<Record<string, unknown>>);
+        const RainbowSDK = (rainbowModule.RainbowSDK ?? rainbowModule.default) as { create?: (config: Record<string, string>) => RainbowSDKInstance };
 
         if (!RainbowSDK?.create) {
           throw new Error("Rainbow Web SDK module did not export RainbowSDK.create");
