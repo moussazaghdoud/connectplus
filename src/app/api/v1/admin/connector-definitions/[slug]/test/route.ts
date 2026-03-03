@@ -53,7 +53,7 @@ export const POST = apiHandler(async (_request: NextRequest, ctx, params) => {
   await prisma.connectorDefinition.update({
     where: { slug },
     data: {
-      lastTestResult: results as unknown as Record<string, unknown>,
+      lastTestResult: results as object,
       status: results.passed ? definition.status : "DRAFT",
     },
   });

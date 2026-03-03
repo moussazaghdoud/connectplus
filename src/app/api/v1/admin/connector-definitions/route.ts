@@ -91,7 +91,7 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
       name,
       description: description ?? "",
       logoUrl: logoUrl ?? null,
-      config: (config ?? {}) as Record<string, unknown>,
+      config: (config ?? {}) as object,
       tenantId: ctx.tenant.tenantId === "system" ? null : ctx.tenant.tenantId,
       createdBy: ctx.tenant.tenantSlug,
       status: "DRAFT",
@@ -104,7 +104,7 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
     data: {
       definitionId: definition.id,
       version: 1,
-      config: (config ?? {}) as Record<string, unknown>,
+      config: (config ?? {}) as object,
       changedBy: ctx.tenant.tenantSlug,
     },
   });

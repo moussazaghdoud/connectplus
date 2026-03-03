@@ -66,7 +66,7 @@ export const PUT = apiHandler(async (request: NextRequest, ctx, params) => {
       data: {
         definitionId: existing.id,
         version: newVersion,
-        config: config as Record<string, unknown>,
+        config: config as object,
         changedBy: ctx.tenant.tenantSlug,
       },
     });

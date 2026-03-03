@@ -76,7 +76,7 @@ export const POST = apiHandler(async (request: NextRequest, ctx, params) => {
   await prisma.connectorDefinition.update({
     where: { slug },
     data: {
-      config: targetVersion.config as Record<string, unknown>,
+      config: targetVersion.config as object,
       version: newVersion,
     },
   });
@@ -86,7 +86,7 @@ export const POST = apiHandler(async (request: NextRequest, ctx, params) => {
     data: {
       definitionId: definition.id,
       version: newVersion,
-      config: targetVersion.config as Record<string, unknown>,
+      config: targetVersion.config as object,
       changedBy: `${ctx.tenant.tenantSlug} (rollback from v${version})`,
     },
   });
