@@ -77,11 +77,14 @@ export const GET = apiHandler(async (request: NextRequest, ctx, params) => {
     );
   }
 
+  // Use stored redirect URI (from Step 7) — url.origin may be wrong behind proxy
+  const finalRedirectUri = credentials.redirectUri ?? redirectUri;
+
   // Build OAuth URL
   const authUrl = buildOAuth2AuthUrl(
     defConfig.auth,
     clientId,
-    redirectUri,
+    finalRedirectUri,
     ctx.tenant.tenantId
   );
 
