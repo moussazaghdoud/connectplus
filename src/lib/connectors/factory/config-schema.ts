@@ -40,7 +40,7 @@ const authSchema = z.object({
 
 const contactSearchRequestSchema = z.object({
   bodyTemplate: z.string().optional(),
-  queryParams: z.record(z.string()).optional(),
+  queryParams: z.record(z.string(), z.string()).optional(),
 });
 
 const contactSearchResponseSchema = z.object({
@@ -86,7 +86,7 @@ const webhookSchema = z.object({
   maxTimestampAgeMs: z.number().int().positive().optional(),
   tokenHeader: z.string().optional(),
   eventTypeField: z.string().min(1),
-  eventTypeMapping: z.record(z.string()),
+  eventTypeMapping: z.record(z.string(), z.string()),
   externalIdField: z.string().min(1),
   idempotencyKeyField: z.string().optional(),
 });
