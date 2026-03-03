@@ -42,7 +42,9 @@ export function TestActivateStep({ state, apiKey }: StepProps) {
       });
       const data = await resp.json();
       if (data.error) {
-        setError(data.error.message);
+        const details = data.error.details as Array<{ path: string[]; message: string }> | undefined;
+        const detailStr = details?.map((d) => `- ${d.path?.join(".") ?? "?"}: ${d.message}`).join("\n") ?? "";
+        setError(data.error.message + (detailStr ? "\n\nValidation errors:\n" + detailStr : ""));
       } else {
         setTestResults(data);
       }
@@ -93,7 +95,7 @@ export function TestActivateStep({ state, apiKey }: StepProps) {
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>
+        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm whitespace-pre-wrap">{error}</div>
       )}
 
       <div className="flex gap-3">
