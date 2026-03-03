@@ -193,7 +193,7 @@ export function WizardShell({ apiKey, editSlug }: WizardShellProps) {
       {/* Step content */}
       <StepComponent
         state={state}
-        dispatch={dispatch}
+        dispatch={dispatch as never}
         apiKey={apiKey}
       />
 
