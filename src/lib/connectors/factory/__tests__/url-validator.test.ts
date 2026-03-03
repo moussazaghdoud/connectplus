@@ -5,7 +5,7 @@ describe("validateUrl", () => {
   const origEnv = process.env.NODE_ENV;
 
   afterEach(() => {
-    process.env.NODE_ENV = origEnv;
+    (process.env as Record<string, string | undefined>).NODE_ENV = origEnv;
   });
 
   it("accepts valid HTTPS URLs", () => {
@@ -14,12 +14,12 @@ describe("validateUrl", () => {
   });
 
   it("accepts HTTP in non-production", () => {
-    process.env.NODE_ENV = "development";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
     expect(validateUrl("http://api.example.com")).toEqual({ valid: true });
   });
 
   it("rejects HTTP in production", () => {
-    process.env.NODE_ENV = "production";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     const result = validateUrl("http://api.example.com");
     expect(result.valid).toBe(false);
     expect(result.error).toContain("HTTPS");

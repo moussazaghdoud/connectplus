@@ -108,7 +108,7 @@ export const connectorDefinitionConfigSchema = z.object({
 });
 
 /** Validate a partial config (for draft saves where not all fields are filled) */
-export const connectorDefinitionConfigPartialSchema = connectorDefinitionConfigSchema.deepPartial();
+export const connectorDefinitionConfigPartialSchema = connectorDefinitionConfigSchema.partial();
 
 /** Validate the slug format */
 export const connectorSlugSchema = z

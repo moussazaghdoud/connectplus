@@ -98,7 +98,7 @@ const contactSearchFieldMapping: TestFn = async (def) => {
   const connector = new RestCrmConnector("test", "Test", "1.0.0", def);
   try {
     const sample = sampleContact();
-    const mapped = connector.mapContact({ externalId: "123", source: "test", rawData: sample });
+    const mapped = connector.mapContact({ externalId: "123", source: "test", raw: sample });
     const hasName = !!mapped.displayName;
     return { category: "contact_search", name: "field_mapping", status: hasName ? "passed" : "failed", durationMs: elapsed(), details: { mapped } };
   } catch (err) {

@@ -134,13 +134,13 @@ export class RestCrmConnector implements ConnectorInterface {
       return {
         externalId: String(getByPath(obj, idField) ?? ""),
         source: this.manifest.id,
-        rawData: obj,
+        raw: obj,
       } as ExternalContact;
     });
   }
 
   mapContact(externalContact: ExternalContact): CanonicalContact {
-    const raw = externalContact.rawData as Record<string, unknown>;
+    const raw = externalContact.raw as Record<string, unknown>;
     const mapped = mapContactFields(raw, this.def.contactFieldMapping as unknown as Record<string, string | undefined>);
 
     return {
@@ -151,7 +151,7 @@ export class RestCrmConnector implements ConnectorInterface {
       title: mapped.title || undefined,
       externalId: externalContact.externalId,
       source: this.manifest.id,
-      metadata: { raw: externalContact.rawData },
+      metadata: { raw: externalContact.raw },
     };
   }
 
