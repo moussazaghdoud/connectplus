@@ -348,11 +348,17 @@ export function useRainbowWebSDK(
           throw new Error("Rainbow Web SDK module did not export RainbowSDK.create");
         }
 
+        // Map short host names to full Rainbow server URLs
+        const serverURL = host.startsWith("http") ? host
+          : host === "official" ? "https://openrainbow.com"
+          : host === "sandbox" ? "https://sandbox.openrainbow.com"
+          : `https://${host}`;
+
         const instance = RainbowSDK.create({
           appConfig: {
             appID: appId,
             appSecret: appSecret,
-            serverURL: host,
+            serverURL,
           },
           autoLogin: false,
         } as never);
