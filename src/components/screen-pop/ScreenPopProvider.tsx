@@ -80,9 +80,8 @@ export function ScreenPopProvider() {
           const data = JSON.parse(e.data);
           const callId = data.interactionId || data.callId || "unknown";
 
-          // In WebRTC mode, skip SSE screen-pops if the hook already knows about this call
-          // (the browser SDK will handle it directly)
-          if (rbMode === "webrtc" && webrtc.currentCall?.callId === callId) {
+          // In WebRTC mode, skip ALL SSE notifications — SoftphoneControls handles calls
+          if (rbMode === "webrtc" && rbStatus === "connected") {
             return;
           }
 
@@ -551,16 +550,13 @@ export function ScreenPopProvider() {
         />
       )}
 
-      {/* SSE notification stack */}
-      {callList.map((call, i) => (
+      {/* SSE notification stack (hidden in WebRTC mode — SoftphoneControls handles calls) */}
+      {!isWebRTCActive && callList.map((call, i) => (
         <CallNotification
           key={call.callId}
           call={call}
           index={i}
           onDismiss={handleDismiss}
-          webrtcMode={isWebRTCActive}
-          onAnswer={isWebRTCActive ? webrtc.answer : undefined}
-          onReject={isWebRTCActive ? webrtc.reject : undefined}
         />
       ))}
 
