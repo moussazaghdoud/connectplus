@@ -596,79 +596,65 @@ export function useRainbowWebSDK(
     const callAny = call as unknown as Record<string, unknown>;
     const sdkAny = sdk as unknown as Record<string, unknown>;
 
-    console.log("[WebRTC] Call status:", JSON.stringify(callAny.status), "| type:", JSON.stringify(callAny.type));
+    const statusStr = JSON.stringify(callAny.status);
+    console.log("[WebRTC] Call status:", statusStr, "| type:", JSON.stringify(callAny.type));
 
-    // The call from getActiveCall() is a telephony/gateway wrapper.
-    // For SipWise/media pillar, we need the underlying WebRTC P2P call.
-    // Look for it in webrtcP2PService or via the call's internal references.
+    // The telephony call (status: incommingCall) can't be answered via callService
+    // because callService expects the P2P call (status: RINGING_INCOMMING).
+    // For SipWise: answer via Rainbow REST API directly.
 
-    // 1. Try the call's webrtcCall / p2pCall reference
-    const p2pCall = (callAny.webrtcCall ?? callAny._webrtcCall ?? callAny.p2pCall ?? callAny._p2pCall) as Record<string, unknown> | undefined;
-    if (p2pCall) {
-      console.log("[WebRTC] Found P2P call ref, status:", JSON.stringify(p2pCall.status));
-    }
+    // Extract the telephony call ID (SDxxxxx format)
+    const telCallId = (callAny.telephonyCallId ?? callAny.telCallId ?? callAny.connectionId) as string | undefined;
+    console.log("[WebRTC] Telephony call ID:", telCallId);
 
-    // 2. Try to find the P2P call in webrtcP2PService
-    let webrtcP2P: Record<string, unknown> | undefined;
-    const allKeys = new Set<string>();
-    let proto = Object.getPrototypeOf(sdk);
-    while (proto && proto !== Object.prototype) {
-      Object.getOwnPropertyNames(proto).forEach(k => allKeys.add(k));
-      proto = Object.getPrototypeOf(proto);
-    }
-    Object.keys(sdk).forEach(k => allKeys.add(k));
+    // Try REST API answer for SipWise
+    try {
+      console.log("[WebRTC] Answering via Rainbow REST API");
+      const token = (sdkAny._connectionService as Record<string, unknown> | undefined)?.token
+        ?? (sdkAny.connectionService as Record<string, unknown> | undefined)?.token;
 
-    for (const key of allKeys) {
-      try {
-        if (/webrtc.*p2p|p2p.*service/i.test(key)) {
-          const svc = sdkAny[key];
-          if (svc && typeof svc === "object") {
-            webrtcP2P = svc as Record<string, unknown>;
-            console.log("[WebRTC] Found webrtcP2P service at:", key);
-            break;
+      // Find the auth token from the SDK
+      let authToken = token as string | undefined;
+      if (!authToken) {
+        // Try to get from localStorage (SDK stores it)
+        authToken = localStorage.getItem("rainbow_token") ?? undefined;
+      }
+      if (!authToken) {
+        // Search SDK for token
+        for (const key of Object.keys(sdkAny)) {
+          const val = sdkAny[key];
+          if (val && typeof val === "object") {
+            const t = (val as Record<string, unknown>).token ?? (val as Record<string, unknown>).authToken;
+            if (typeof t === "string" && t.length > 20) {
+              authToken = t;
+              console.log("[WebRTC] Found token on:", key);
+              break;
+            }
           }
         }
-      } catch { /* skip */ }
-    }
-
-    // 3. Try accepting via webrtcP2P service
-    if (webrtcP2P) {
-      const p2pMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(webrtcP2P))
-        .filter(m => /answer|accept|propose|session/i.test(m));
-      console.log("[WebRTC] webrtcP2P methods:", p2pMethods);
-
-      for (const method of ["answerCall", "acceptProposition", "acceptCall", "answer"]) {
-        if (typeof webrtcP2P[method] === "function") {
-          console.log(`[WebRTC] Trying webrtcP2P.${method}`);
-          try {
-            const r = (webrtcP2P[method] as Function)(p2pCall ?? call);
-            if (r?.then) (r as Promise<void>).then(
-              () => console.log(`[WebRTC] webrtcP2P.${method} OK`),
-              (e: unknown) => console.warn(`[WebRTC] webrtcP2P.${method} rejected:`, e)
-            );
-            return;
-          } catch (e) { console.warn(`[WebRTC] webrtcP2P.${method} threw:`, e); }
-        }
       }
-    }
 
-    // 4. Try callService with the P2P call (not the gateway call)
-    if (p2pCall) {
-      console.log("[WebRTC] Trying callService.answerCall with P2P call");
-      try {
-        sdk.callService.answerCall(p2pCall as unknown as RainbowCall, false).then(
-          () => console.log("[WebRTC] answerCall(p2pCall) OK"),
-          (e: unknown) => console.warn("[WebRTC] answerCall(p2pCall) rejected:", e)
-        );
+      if (authToken && telCallId) {
+        const resp = await fetch(`https://openrainbow.com/api/rainbow/voice/v1.0/calls/${encodeURIComponent(telCallId)}/answer`, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+        console.log("[WebRTC] REST answer response:", resp.status, await resp.text());
         return;
-      } catch (e) { console.warn("[WebRTC] answerCall(p2pCall) threw:", e); }
-    }
+      }
 
-    // 5. Try callService.answerCall with video=true (it's a Video type call)
-    console.log("[WebRTC] Trying callService.answerCall(call, true) for Video call");
-    sdk.callService.answerCall(call, true).then(
-      () => console.log("[WebRTC] answerCall(video=true) OK"),
-      (e: unknown) => console.error("[WebRTC] answerCall(video=true) rejected:", e)
+      if (!authToken) console.warn("[WebRTC] No auth token found for REST API");
+      if (!telCallId) console.warn("[WebRTC] No telephony call ID found. Call keys:", Object.keys(callAny).filter(k => /call|id|tel|conn/i.test(k)));
+    } catch (e) { console.error("[WebRTC] REST answer failed:", e); }
+
+    // Fallback: try callService anyway
+    console.log("[WebRTC] Fallback: callService.answerCall");
+    sdk.callService.answerCall(call, false).then(
+      () => console.log("[WebRTC] callService.answerCall OK"),
+      (e: unknown) => console.error("[WebRTC] callService.answerCall rejected:", e)
     );
   }, []);
 
