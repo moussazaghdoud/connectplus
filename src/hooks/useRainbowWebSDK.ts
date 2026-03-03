@@ -71,25 +71,18 @@ export interface UseRainbowWebSDKReturn {
 
 // ── Helper: map SDK status to our CallState ──────────────
 
-function mapCallStatus(sdkStatus: RainbowCallStatus): CallState {
-  switch (sdkStatus) {
-    case "ringing-incoming":
-      return "ringing_incoming";
-    case "ringing-outgoing":
-      return "ringing_outgoing";
-    case "connecting":
-      return "connecting";
-    case "active":
-      return "active";
-    case "on-hold":
-      return "on_hold";
-    case "releasing":
-    case "unknown":
-    case "Unknown":
-      return "ended";
-    default:
-      return "idle";
-  }
+function mapCallStatus(sdkStatus: string): CallState {
+  const s = (sdkStatus || "").toLowerCase().replace(/_/g, "-");
+  if (s.includes("ringing") && (s.includes("incom") || s.includes("incom"))) return "ringing_incoming";
+  if (s.includes("ringing") && s.includes("out")) return "ringing_outgoing";
+  if (s.includes("ringing")) return "ringing_incoming"; // default ringing = incoming
+  if (s.includes("connecting") || s.includes("dialing")) return "connecting";
+  if (s.includes("active") || s.includes("answered") || s.includes("connected")) return "active";
+  if (s.includes("hold") || s.includes("held")) return "on_hold";
+  if (s.includes("releasing") || s.includes("ended") || s.includes("cleared")) return "ended";
+  if (s === "unknown" || s === "") return "idle";
+  console.log("[WebRTC] Unknown call status:", sdkStatus);
+  return "idle";
 }
 
 // ── Helper: derive quality label from stats ──────────────
@@ -286,11 +279,19 @@ export function useRainbowWebSDK(
     (call: RainbowCall) => {
       rawCallRef.current = call;
 
-      const newState = mapCallStatus(call.status);
+      // v5 SDK may use different property names and status formats
+      const callAny = call as unknown as Record<string, unknown>;
+      const rawStatus = (callAny.status ?? callAny.state ?? "") as string;
+      const newState = mapCallStatus(rawStatus);
       const callerNumber =
-        call.callerNumber ??
+        (callAny.callerNumber as string) ??
+        (callAny.callingPartyNumber as string) ??
+        (callAny.remotePartyNumber as string) ??
         call.contact?.phoneNumbers?.[0]?.number ??
+        (callAny.displayName as string) ??
         "";
+
+      console.log("[WebRTC] Call state change:", { id: call.id, rawStatus, mapped: newState, caller: callerNumber });
 
       setCallState(newState);
       setCurrentCall({
