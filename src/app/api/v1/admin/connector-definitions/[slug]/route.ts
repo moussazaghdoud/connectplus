@@ -55,7 +55,7 @@ export const PUT = apiHandler(async (request: NextRequest, ctx, params) => {
       ...(name !== undefined && { name }),
       ...(description !== undefined && { description }),
       ...(logoUrl !== undefined && { logoUrl }),
-      ...(config !== undefined && { config: config as Record<string, unknown> }),
+      ...(config !== undefined && { config: config as object }),
       version: newVersion,
     },
   });
