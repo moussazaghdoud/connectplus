@@ -585,22 +585,67 @@ export function useRainbowWebSDK(
   const answer = useCallback(() => {
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
+    console.log("[WebRTC] Answer clicked", { sdk: !!sdk, call: !!call, callId: call?.id });
     if (!sdk || !call) return;
-    sdk.callService.answerCall(call, false);
+
+    const callAny = call as unknown as Record<string, unknown>;
+    const sdkAny = sdk as unknown as Record<string, unknown>;
+
+    // Try multiple answer methods — SDK v5 SipWise uses different paths
+    try {
+      // 1. callService.answerCall (standard)
+      if (sdk.callService?.answerCall) {
+        console.log("[WebRTC] Trying callService.answerCall");
+        sdk.callService.answerCall(call, false);
+        return;
+      }
+    } catch (e) { console.warn("[WebRTC] callService.answerCall failed:", e); }
+
+    try {
+      // 2. telephonyService.answerCall
+      const tel = sdkAny.telephonyService as Record<string, unknown> | undefined;
+      if (tel?.answerCall) {
+        console.log("[WebRTC] Trying telephonyService.answerCall");
+        (tel.answerCall as Function)(call);
+        return;
+      }
+    } catch (e) { console.warn("[WebRTC] telephonyService.answerCall failed:", e); }
+
+    try {
+      // 3. Call object's own answer method
+      if (typeof callAny.answer === "function") {
+        console.log("[WebRTC] Trying call.answer()");
+        (callAny.answer as Function)();
+        return;
+      }
+      if (typeof callAny.accept === "function") {
+        console.log("[WebRTC] Trying call.accept()");
+        (callAny.accept as Function)();
+        return;
+      }
+    } catch (e) { console.warn("[WebRTC] call.answer/accept failed:", e); }
+
+    console.error("[WebRTC] No answer method worked");
   }, []);
 
   const reject = useCallback(() => {
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
+    console.log("[WebRTC] Reject clicked", { sdk: !!sdk, call: !!call });
     if (!sdk || !call) return;
-    sdk.callService.releaseCall(call, "rejected");
+    try {
+      sdk.callService.releaseCall(call, "rejected");
+    } catch (e) { console.warn("[WebRTC] releaseCall(reject) failed:", e); }
   }, []);
 
   const hangup = useCallback(() => {
     const sdk = sdkRef.current;
     const call = rawCallRef.current;
+    console.log("[WebRTC] Hangup clicked", { sdk: !!sdk, call: !!call });
     if (!sdk || !call) return;
-    sdk.callService.releaseCall(call);
+    try {
+      sdk.callService.releaseCall(call);
+    } catch (e) { console.warn("[WebRTC] releaseCall(hangup) failed:", e); }
   }, []);
 
   const toggleMute = useCallback(() => {
