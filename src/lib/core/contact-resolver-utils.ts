@@ -95,7 +95,7 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
             phone: mapped.phone ?? phone,
             company: mapped.company ?? null,
             title: mapped.title ?? null,
-            metadata: (mapped.metadata ?? {}) as Record<string, unknown>,
+            metadata: (mapped.metadata ?? {}) as any,
           },
         });
 
