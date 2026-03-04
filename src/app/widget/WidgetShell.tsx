@@ -316,17 +316,17 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-[400px] mx-auto text-sm">
+    <div className="flex flex-col h-screen w-full max-w-2xl mx-auto text-base">
       {/* ── Header ──────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
+      <header className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50 shrink-0">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${statusDot[status]}`} />
-          <span className="font-semibold text-gray-900 text-xs">
+          <span className={`w-2.5 h-2.5 rounded-full ${statusDot[status]}`} />
+          <span className="font-semibold text-gray-900 text-sm">
             ConnectPlus
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 truncate max-w-[120px]">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 truncate max-w-[200px]">
             {user.name || user.email}
           </span>
           <button
@@ -343,72 +343,77 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
       </header>
 
       {/* ── Rainbow connection (compact) ─────────────────── */}
-      <div className="px-3 py-2 border-b border-gray-100 bg-white shrink-0">
+      <div className="px-5 py-3 border-b border-gray-100 bg-white shrink-0">
         {rbStatus === "connected" ? (
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs text-gray-600 truncate">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+              <span className="text-sm text-gray-600 truncate">
                 {rbConnectedAs}
               </span>
             </div>
             <button
               onClick={() => disconnectRainbow()}
-              className="text-xs text-red-500 hover:text-red-700"
+              className="text-sm text-red-500 hover:text-red-700"
             >
               Disconnect
             </button>
           </div>
         ) : (
-          <form onSubmit={handleRainbowSubmit} className="space-y-2">
-            <div className="flex gap-1">
+          <form onSubmit={handleRainbowSubmit} className="space-y-3">
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => handleModeChange("webrtc")}
                 disabled={rbStatus === "connecting"}
-                className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors
                   ${rbMode === "webrtc" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
               >
-                WebRTC
+                WebRTC (Browser Audio)
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange("s2s")}
                 disabled={rbStatus === "connecting"}
-                className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors
                   ${rbMode === "s2s" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
               >
-                S2S
+                Notification Only
               </button>
             </div>
-            <div className="flex gap-1.5">
+            <p className="text-xs text-gray-400">
+              {rbMode === "webrtc"
+                ? "Calls handled in your browser — microphone required"
+                : "Get notified of calls — audio stays on your desk phone"}
+            </p>
+            <div className="flex gap-2">
               <input
                 type="email"
                 value={rbLogin}
                 onChange={(e) => setRbLogin(e.target.value)}
                 placeholder="Rainbow email"
-                className="flex-1 min-w-0 rounded border border-gray-200 px-2 py-1 text-xs
-                           focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="flex-1 min-w-0 rounded-md border border-gray-200 px-3 py-2 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <input
                 type="password"
                 value={rbPassword}
                 onChange={(e) => setRbPassword(e.target.value)}
-                placeholder="Password"
-                className="flex-1 min-w-0 rounded border border-gray-200 px-2 py-1 text-xs
-                           focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Rainbow password"
+                className="flex-1 min-w-0 rounded-md border border-gray-200 px-3 py-2 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 type="submit"
                 disabled={rbStatus === "connecting" || !rbCanConnect}
-                className="px-2 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium
+                className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium
                            transition-colors disabled:opacity-50 shrink-0"
               >
-                {rbStatus === "connecting" ? "..." : "Go"}
+                {rbStatus === "connecting" ? "..." : "Connect"}
               </button>
             </div>
             {rbError && (
-              <p className="text-xs text-red-500 truncate">{rbError}</p>
+              <p className="text-sm text-red-500 truncate">{rbError}</p>
             )}
           </form>
         )}
@@ -418,7 +423,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
       <div className="flex border-b border-gray-200 bg-white shrink-0">
         <button
           onClick={() => setActiveTab("calls")}
-          className={`flex-1 py-1.5 text-xs font-medium transition-colors
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors
             ${activeTab === "calls"
               ? "text-blue-600 border-b-2 border-blue-600"
               : "text-gray-500 hover:text-gray-700"}`}
@@ -432,7 +437,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`flex-1 py-1.5 text-xs font-medium transition-colors
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors
             ${activeTab === "history"
               ? "text-blue-600 border-b-2 border-blue-600"
               : "text-gray-500 hover:text-gray-700"}`}
@@ -444,7 +449,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
       {/* ── Content ──────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === "calls" && (
-          <div className="p-3 space-y-2">
+          <div className="p-5 space-y-3">
             {/* WebRTC softphone controls */}
             {isWebRTCActive && webrtc.currentCall && webrtc.callState !== "idle" && (
               <div className="relative">
@@ -472,8 +477,8 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
 
             {/* Empty state */}
             {callList.length === 0 && !webrtc.currentCall && (
-              <div className="text-center py-8">
-                <p className="text-gray-400 text-xs">
+              <div className="text-center py-16">
+                <p className="text-gray-400 text-sm">
                   {rbStatus === "connected"
                     ? "Waiting for incoming calls..."
                     : "Connect to Rainbow above to receive calls"}
