@@ -30,4 +30,8 @@ export interface TenantContext {
   tenantId: string;
   tenantSlug: string;
   tenantStatus: TenantStatus;
+  /** Set when authenticated via user session (not API key) */
+  userId?: string;
+  /** Set when authenticated via user session */
+  userRole?: string;
 }

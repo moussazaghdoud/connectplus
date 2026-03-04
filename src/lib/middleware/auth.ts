@@ -3,11 +3,13 @@ import { createHash, randomBytes } from "crypto";
 import { prisma } from "../db";
 import { AuthenticationError } from "../core/errors";
 import type { TenantContext } from "../core/models/tenant";
+import { getSession } from "../auth/session";
 
 const API_KEY_HEADER = "x-api-key";
 
 /**
- * Authenticate a request via API key.
+ * Authenticate a request via API key or session cookie.
+ * Tries API key first, then falls back to session cookie.
  * Returns the tenant context if valid, throws AuthenticationError if not.
  */
 export async function authenticateRequest(
@@ -17,32 +19,45 @@ export async function authenticateRequest(
   const apiKey =
     request.headers.get(API_KEY_HEADER) ?? url.searchParams.get("key");
 
-  if (!apiKey) {
-    throw new AuthenticationError("Missing API key");
+  // Try API key first
+  if (apiKey) {
+    const hashedKey = hashApiKey(apiKey);
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { apiKey: hashedKey },
+    });
+
+    if (!tenant) {
+      throw new AuthenticationError("Invalid API key");
+    }
+
+    if (tenant.status !== "ACTIVE") {
+      throw new AuthenticationError(
+        `Tenant is ${tenant.status.toLowerCase()}`
+      );
+    }
+
+    return {
+      tenantId: tenant.id,
+      tenantSlug: tenant.slug,
+      tenantStatus: tenant.status,
+    };
   }
 
-  // Hash the provided key and compare against stored hash
-  const hashedKey = hashApiKey(apiKey);
+  // Fall back to session cookie
+  const session = await getSession();
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { apiKey: hashedKey },
-  });
-
-  if (!tenant) {
-    throw new AuthenticationError("Invalid API key");
+  if (session) {
+    return {
+      tenantId: session.tenantId,
+      tenantSlug: session.tenantSlug,
+      tenantStatus: "ACTIVE",
+      userId: session.userId,
+      userRole: session.role,
+    };
   }
 
-  if (tenant.status !== "ACTIVE") {
-    throw new AuthenticationError(
-      `Tenant is ${tenant.status.toLowerCase()}`
-    );
-  }
-
-  return {
-    tenantId: tenant.id,
-    tenantSlug: tenant.slug,
-    tenantStatus: tenant.status,
-  };
+  throw new AuthenticationError("Missing API key or session");
 }
 
 /** Hash an API key with SHA-256 for storage/comparison */
