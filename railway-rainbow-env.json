@@ -1,0 +1,8 @@
+{
+  "RAINBOW_APP_ID": "<your app id>",
+  "RAINBOW_APP_SECRET": "<your app secret>",
+  "RAINBOW_LOGIN": "<bot user email>",
+  "RAINBOW_PASSWORD": "<bot user password>",
+  "RAINBOW_HOST_CALLBACK": "https://connectplus-production-f6a0.up.railway.app/api/v1/rainbow/webhooks",
+  "RAINBOW_HOST": "official"
+}
