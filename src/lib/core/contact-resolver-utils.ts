@@ -78,7 +78,7 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
         enabled: config.enabled,
       });
 
-      const results = await connector.searchContacts({ phone, limit: 1 });
+      const results = await connector.searchContacts({ tenantId, phone, limit: 1 });
       if (results.length > 0) {
         const mapped = connector.mapContact(results[0]);
         logger.info(
