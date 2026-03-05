@@ -9,6 +9,32 @@ import { resolveCallerByPhone, buildCrmUrl, normalizePhone } from "@/lib/core/co
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/observability/logger";
 import type { ScreenPopData } from "@/lib/sse/types";
+import { processEvent } from "@/lib/cti/bridge/event-processor";
+import type { RawTelephonyEvent } from "@/lib/cti/bridge/event-processor";
+
+/** Forward a call event to the CTI bridge for /cti-widget subscribers */
+async function forwardToCti(
+  tenantId: string,
+  callId: string,
+  ctiState: "ringing" | "connected" | "ended",
+  callerNumber: string
+): Promise<void> {
+  try {
+    const raw: RawTelephonyEvent = {
+      callId,
+      direction: "inbound",
+      fromNumber: callerNumber,
+      toNumber: "",
+      timestamp: new Date().toISOString(),
+      state: ctiState,
+      agentId: "*",
+      tenantId,
+    };
+    await processEvent(raw);
+  } catch (err) {
+    logger.warn({ err, tenantId, callId, ctiState }, "Failed to forward call event to CTI bridge");
+  }
+}
 
 /**
  * POST /api/v1/calls/event — Browser reports WebRTC call events.
@@ -74,6 +100,9 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
 
       sseManager.broadcast(tenantId, "screen.pop", screenPopData);
 
+      // Forward to CTI bridge for /cti-widget
+      await forwardToCti(tenantId, callId, "ringing", normalized || callerNumber || "");
+
       // Create interaction record
       try {
         const interaction = await runWithTenant(
@@ -106,6 +135,8 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
     }
 
     case "active": {
+      await forwardToCti(tenantId, callId, "connected", callerNumber ?? "");
+
       const interaction = await prisma.interaction.findFirst({
         where: { rainbowCallId: callId, tenantId },
       });
@@ -126,6 +157,8 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
     }
 
     case "ended": {
+      await forwardToCti(tenantId, callId, "ended", callerNumber ?? "");
+
       const interaction = await prisma.interaction.findFirst({
         where: { rainbowCallId: callId, tenantId },
       });
