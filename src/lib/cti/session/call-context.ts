@@ -8,6 +8,8 @@
  */
 
 import { logger } from "../../observability/logger";
+import type { CallSummary } from "../models/call-summary";
+import { determineOutcome } from "../models/call-summary";
 
 const log = logger.child({ module: "call-context" });
 
@@ -30,6 +32,14 @@ export interface CallContext {
   /** Screen pop state */
   screenPopSent: boolean;
   screenPopOpenedAt?: string;
+  /** Call lifecycle tracking */
+  wasConnected?: boolean;
+  connectedAt?: string;
+  endedAt?: string;
+  /** Agent notes (from wrap-up) */
+  notes?: string;
+  /** Recording URL */
+  recordingUrl?: string;
 }
 
 const KEY = Symbol.for("cti.callContext");
@@ -99,6 +109,39 @@ export function markRecordOpened(callId: string): void {
 }
 
 /**
+ * Mark a call as connected (answered).
+ */
+export function markCallConnected(callId: string): void {
+  const ctx = getStore().get(callId);
+  if (ctx) {
+    ctx.wasConnected = true;
+    ctx.connectedAt = new Date().toISOString();
+  }
+}
+
+/**
+ * Set agent notes on a call context.
+ */
+export function setCallNotes(callId: string, notes: string): void {
+  const ctx = getStore().get(callId);
+  if (ctx) ctx.notes = notes;
+}
+
+/**
+ * Set notes by correlationId (for wrap-up after call ended).
+ */
+export function setNotesByCorrelationId(correlationId: string, notes: string): CallContext | undefined {
+  for (const ctx of getStore().values()) {
+    if (ctx.correlationId === correlationId) {
+      ctx.notes = notes;
+      return ctx;
+    }
+  }
+  // Also check completed summaries store
+  return undefined;
+}
+
+/**
  * Remove call context (after call ends and logging is done).
  */
 export function removeCallContext(callId: string): CallContext | undefined {
@@ -106,6 +149,98 @@ export function removeCallContext(callId: string): CallContext | undefined {
   const ctx = store.get(callId);
   store.delete(callId);
   return ctx;
+}
+
+// ── Completed call summaries (for wrap-up and audit) ──
+
+const SUMMARY_KEY = Symbol.for("cti.callSummaries");
+
+function getSummaryStore(): Map<string, CallSummary> {
+  const g = globalThis as Record<symbol, Map<string, CallSummary>>;
+  if (!g[SUMMARY_KEY]) g[SUMMARY_KEY] = new Map();
+  return g[SUMMARY_KEY];
+}
+
+/**
+ * Build a CallSummary from a call context at terminal state.
+ */
+export function buildCallSummary(callId: string, state: string): CallSummary | undefined {
+  const ctx = getStore().get(callId);
+  if (!ctx) return undefined;
+
+  const endedAt = new Date().toISOString();
+  const startMs = new Date(ctx.connectedAt || ctx.startTime).getTime();
+  const endMs = new Date(endedAt).getTime();
+  const durationSeconds = Math.max(0, Math.round((endMs - startMs) / 1000));
+
+  const summary: CallSummary = {
+    correlationId: ctx.correlationId,
+    providerCallId: ctx.callId,
+    direction: ctx.direction,
+    from: ctx.direction === "inbound" ? ctx.phone : "",
+    to: ctx.direction === "outbound" ? ctx.phone : "",
+    startedAt: ctx.startTime,
+    endedAt,
+    durationSeconds: ctx.wasConnected ? durationSeconds : 0,
+    outcome: determineOutcome(state, ctx.direction, !!ctx.wasConnected),
+    agentId: ctx.agentId,
+    tenantId: ctx.tenantId,
+    recordingUrl: ctx.recordingUrl,
+    notes: ctx.notes,
+  };
+
+  // Attach CRM data if available
+  if (ctx.crmRecordId || ctx.crmModule) {
+    summary.crm = {
+      system: "zoho",
+      module: ctx.crmModule as "Contacts" | "Leads" | "Accounts" | undefined,
+      recordId: ctx.crmRecordId,
+      displayName: ctx.contactName,
+      company: ctx.contactCompany,
+    };
+  }
+
+  // Store for later retrieval (wrap-up, audit)
+  getSummaryStore().set(ctx.correlationId, summary);
+
+  // Cap summary store at 200 entries
+  const store = getSummaryStore();
+  if (store.size > 200) {
+    const keys = [...store.keys()];
+    for (let i = 0; i < keys.length - 100; i++) {
+      store.delete(keys[i]);
+    }
+  }
+
+  log.info(
+    { correlationId: ctx.correlationId, outcome: summary.outcome, duration: summary.durationSeconds },
+    "Call summary built"
+  );
+
+  return summary;
+}
+
+/**
+ * Get a completed call summary by correlationId.
+ */
+export function getCallSummary(correlationId: string): CallSummary | undefined {
+  return getSummaryStore().get(correlationId);
+}
+
+/**
+ * Update notes on a completed call summary.
+ */
+export function updateSummaryNotes(correlationId: string, notes: string): CallSummary | undefined {
+  const summary = getSummaryStore().get(correlationId);
+  if (summary) summary.notes = notes;
+  return summary;
+}
+
+/**
+ * Get recent call summaries (for diagnostics).
+ */
+export function getRecentSummaries(limit = 20): CallSummary[] {
+  return [...getSummaryStore().values()].slice(-limit);
 }
 
 /**

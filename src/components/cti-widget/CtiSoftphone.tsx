@@ -5,6 +5,7 @@ import { DialPad } from "./DialPad";
 import { ActiveCallPanel } from "./ActiveCallPanel";
 import { RecentCalls } from "./RecentCalls";
 import { ScreenPopup, type ScreenPopData } from "./ScreenPopup";
+import { CallWrapUp } from "./CallWrapUp";
 import type { CtiCallEvent } from "@/lib/cti/types/call-event";
 
 type Tab = "phone" | "active" | "recent";
@@ -40,6 +41,13 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [screenPop, setScreenPop] = useState<ScreenPopData | null>(null);
+  const [wrapUp, setWrapUp] = useState<{
+    correlationId: string;
+    direction: string;
+    phone: string;
+    contactName?: string;
+    duration: number;
+  } | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Connect to CTI SSE stream
@@ -104,11 +112,26 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       });
       setTab("active");
     } else if (event.state === "ended" || event.state === "missed" || event.state === "failed") {
+      const endedCall = activeCall;
       setActiveCall(null);
       setRecentCalls((prev) => [event, ...prev].slice(0, 20));
+
+      // Show wrap-up panel after call ends
+      if (endedCall) {
+        const phone = endedCall.direction === "inbound" ? endedCall.fromNumber : endedCall.toNumber;
+        const startMs = new Date(endedCall.startedAt).getTime();
+        const duration = Math.max(0, Math.round((Date.now() - startMs) / 1000));
+        setWrapUp({
+          correlationId: endedCall.correlationId,
+          direction: endedCall.direction,
+          phone,
+          contactName: endedCall.crmContext?.displayName,
+          duration,
+        });
+      }
       setTab("phone");
     }
-  }, []);
+  }, [activeCall]);
 
   const callAction = useCallback(
     async (action: string, body: Record<string, unknown> = {}) => {
@@ -223,6 +246,28 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     }).catch(() => {}); // fire-and-forget
   }, [screenPop, agentId]);
 
+  const handleWrapUpSave = useCallback(
+    async (notes: string, disposition: string) => {
+      if (!wrapUp) return;
+      try {
+        await fetch("/api/v1/cti/call-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            correlationId: wrapUp.correlationId,
+            notes,
+            disposition,
+          }),
+        });
+      } catch {
+        // Best effort
+      }
+      setWrapUp(null);
+    },
+    [wrapUp]
+  );
+
   return (
     <div className="flex flex-col h-screen w-full max-w-sm mx-auto bg-white relative">
       {/* Screen Pop Overlay */}
@@ -299,7 +344,19 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === "phone" && <DialPad onDial={handleDial} onDtmf={handleDtmf} hasActiveCall={!!activeCall} />}
+        {/* Call wrap-up panel (shown after call ends) */}
+        {wrapUp && tab === "phone" && (
+          <CallWrapUp
+            correlationId={wrapUp.correlationId}
+            direction={wrapUp.direction}
+            phone={wrapUp.phone}
+            contactName={wrapUp.contactName}
+            duration={wrapUp.duration}
+            onSave={handleWrapUpSave}
+            onDismiss={() => setWrapUp(null)}
+          />
+        )}
+        {tab === "phone" && !wrapUp && <DialPad onDial={handleDial} onDtmf={handleDtmf} hasActiveCall={!!activeCall} />}
         {tab === "active" && (
           <ActiveCallPanel
             call={activeCall}

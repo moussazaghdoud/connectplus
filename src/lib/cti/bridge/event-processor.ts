@@ -10,7 +10,7 @@ import type { CtiCallEvent, CallState, CallDirection, CrmContext } from "../type
 import { getCorrelationId, isDuplicateEvent, clearCorrelation } from "../correlation/correlator";
 import { updateCallState, getCall } from "../state/call-state-store";
 import { broadcastCallEvent, broadcastScreenPop } from "./websocket-manager";
-import { setCallContext, enrichCallContext, removeCallContext } from "../session/call-context";
+import { setCallContext, enrichCallContext, removeCallContext, markCallConnected, buildCallSummary, getCallContext } from "../session/call-context";
 import { metrics } from "../../observability/metrics";
 import { logger } from "../../observability/logger";
 
@@ -163,8 +163,20 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
     );
   }
 
-  // 5c. Clean up call context on terminal states
+  // 5c. Mark call as connected when answered
+  if (raw.state === "connected") {
+    markCallConnected(raw.callId);
+  }
+
+  // 5d. Build CallSummary and clean up on terminal states
   if (raw.state === "ended" || raw.state === "missed" || raw.state === "failed") {
+    const summary = buildCallSummary(raw.callId, raw.state);
+    if (summary) {
+      // Attach summary data to event for call logger
+      event.durationSecs = summary.durationSeconds;
+      event.notes = summary.notes;
+      if (summary.recordingUrl) event.recordingUrl = summary.recordingUrl;
+    }
     removeCallContext(raw.callId);
   }
 

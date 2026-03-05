@@ -52,12 +52,23 @@ export async function logCallToZoho(
   config: ZohoCallLogConfig
 ): Promise<{ success: boolean; zohoCallId?: string; error?: string }> {
   // Idempotency check
+  const idempotencyKey = `zoho-call-log:${event.correlationId}`;
   if (loggedCalls.has(event.correlationId)) {
     log.info(
-      { correlationId: event.correlationId },
+      { correlationId: event.correlationId, idempotencyKey },
       "Call already logged — skipping duplicate"
     );
     metrics.increment("cti_call_log_deduplicated");
+
+    writeAuditLog({
+      tenantId: event.tenantId,
+      correlationId: event.correlationId,
+      actor: `agent:${event.agentId}`,
+      action: "cti.call_log_skipped",
+      resource: `zoho_call:${idempotencyKey}`,
+      detail: { reason: "duplicate" },
+    });
+
     return { success: true, zohoCallId: "duplicate-skipped" };
   }
 
@@ -65,8 +76,12 @@ export async function logCallToZoho(
   const durationMins = formatDuration(event.durationSecs ?? 0);
   const startTime = Date.now();
 
+  // Build subject with contact name if available
+  const contactLabel = event.crmContext?.displayName || event.fromNumber;
+  const dirLabel = event.direction === "inbound" ? "Inbound" : "Outbound";
+
   const payload: ZohoCallPayload = {
-    Subject: `${event.direction === "inbound" ? "Inbound" : "Outbound"} call - ${event.fromNumber}`,
+    Subject: `${dirLabel} call with ${contactLabel}`,
     Call_Type: event.direction === "inbound" ? "Inbound" : "Outbound",
     Call_Start_Time: event.timestamp,
     Call_Duration: durationMins,
@@ -176,14 +191,22 @@ export async function logCallToZoho(
   } catch (err) {
     const latencyMs = Date.now() - startTime;
     metrics.increment("cti_call_log_failed");
+    const errorMsg = err instanceof Error ? err.message : "Unknown error";
     log.error(
       { err, correlationId: event.correlationId, latencyMs },
       "Failed to log call to Zoho after retries"
     );
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
+
+    writeAuditLog({
+      tenantId: event.tenantId,
+      correlationId: event.correlationId,
+      actor: `agent:${event.agentId}`,
+      action: "cti.call_log_failed",
+      resource: `call:${event.callId}`,
+      detail: { error: errorMsg, latencyMs },
+    });
+
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -223,12 +246,16 @@ function buildDescription(event: CtiCallEvent): string {
   if (event.crmContext?.displayName) {
     parts.push(`Contact: ${event.crmContext.displayName}`);
   }
+  if (event.crmContext?.company) {
+    parts.push(`Company: ${event.crmContext.company}`);
+  }
   if (event.recordingUrl) {
     parts.push(`Recording: ${event.recordingUrl}`);
   }
   if (event.notes) {
-    parts.push(`Notes: ${event.notes}`);
+    parts.push(`\nAgent Notes:\n${event.notes}`);
   }
-  parts.push(`Correlation ID: ${event.correlationId}`);
+  parts.push(`\n---\nCorrelation ID: ${event.correlationId}`);
+  parts.push(`Tag: Rainbow CTI`);
   return parts.join("\n");
 }
