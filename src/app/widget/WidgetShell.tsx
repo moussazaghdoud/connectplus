@@ -37,6 +37,12 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
   const [rbConnectedAs, setRbConnectedAs] = useState("");
   const [rbMode, setRbMode] = useState<RainbowMode>("s2s");
 
+  // Refs to avoid stale closures in EventSource listeners
+  const rbModeRef = useRef(rbMode);
+  const rbStatusRef = useRef(rbStatus);
+  rbModeRef.current = rbMode;
+  rbStatusRef.current = rbStatus;
+
   // Tab
   const [activeTab, setActiveTab] = useState<Tab>("calls");
 
@@ -86,10 +92,14 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
         const data = JSON.parse(e.data);
         const callId = data.interactionId || data.callId || "unknown";
 
+        console.log("[Widget] screen.pop received:", { callId, contact: data.contact, mode: rbModeRef.current, status: rbStatusRef.current });
+
         // In WebRTC mode, update the resolved contact info on the active WebRTC call
         // (the server resolved the contact from CRM after receiving the call event)
-        if (rbMode === "webrtc" && rbStatus === "connected") {
+        // Use refs to get current values (avoids stale closure from useEffect mount)
+        if (rbModeRef.current === "webrtc" && rbStatusRef.current === "connected") {
           if (data.contact) {
+            console.log("[Widget] Setting resolved contact for WebRTC:", data.contact.displayName);
             setResolvedContact({
               displayName: data.contact.displayName,
               company: data.contact.company,
@@ -179,7 +189,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
         setStatus("connecting");
       }
     };
-  }, [disconnect, rbMode, rbStatus]);
+  }, [disconnect]); // rbMode/rbStatus accessed via refs to avoid stale closures
 
   // Auto-connect SSE on mount
   useEffect(() => {
