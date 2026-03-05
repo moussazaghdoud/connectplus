@@ -26,8 +26,28 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Login page: allow embedding in iframe (agent logs in from Zoho/CRM)
+        source: "/login",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors *",
+          },
+        ],
+      },
+      {
+        // API routes: allow from iframe (SSE, calls, auth)
+        source: "/api/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors *",
+          },
+        ],
+      },
+      {
         // All other routes: prevent iframe embedding
-        source: "/((?!widget).*)",
+        source: "/((?!widget|login|api).*)",
         headers: [
           {
             key: "X-Frame-Options",
