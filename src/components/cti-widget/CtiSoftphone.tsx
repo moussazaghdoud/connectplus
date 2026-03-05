@@ -63,11 +63,13 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
     es.addEventListener("call.event", (e) => {
       const event: CtiCallEvent = JSON.parse(e.data);
+      console.log("[CTI] call.event received:", event);
       handleCallEvent(event);
     });
 
     es.addEventListener("screen_pop", (e) => {
       const data: ScreenPopData = JSON.parse(e.data);
+      console.log("[CTI] screen_pop received:", data);
       setScreenPop(data);
     });
 
