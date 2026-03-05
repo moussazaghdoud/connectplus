@@ -180,6 +180,11 @@ export class RestCrmConnector implements ConnectorInterface {
       resp = await fetchWithRetry(`${url}?${params.toString()}`, { method: "GET", headers });
     }
 
+    logger.info(
+      { status: resp.status, connector: this.manifest.id },
+      "Contact search API response received"
+    );
+
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
       logger.warn(
@@ -189,7 +194,19 @@ export class RestCrmConnector implements ConnectorInterface {
       return [];
     }
 
-    const data = await resp.json();
+    // Handle 204 No Content (e.g. Zoho returns 204 when no results)
+    if (resp.status === 204) {
+      logger.info({ connector: this.manifest.id }, "Contact search returned 204 No Content");
+      return [];
+    }
+
+    const responseText = await resp.text();
+    if (!responseText || responseText.trim() === "") {
+      logger.info({ connector: this.manifest.id }, "Contact search returned empty body");
+      return [];
+    }
+
+    const data = JSON.parse(responseText);
     const results = getByPath(data, searchConf.response.resultsPath) as unknown[];
 
     logger.info(
