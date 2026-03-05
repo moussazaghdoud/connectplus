@@ -237,6 +237,7 @@ export class RestCrmConnector implements ConnectorInterface {
       phone: mapped.phone || undefined,
       company: mapped.company || undefined,
       title: mapped.title || undefined,
+      avatarUrl: mapped.avatarUrl || undefined,
       externalId: externalContact.externalId,
       source: this.manifest.id,
       metadata: { raw: externalContact.raw },

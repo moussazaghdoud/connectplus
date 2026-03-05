@@ -9,6 +9,7 @@ interface SoftphoneControlsProps {
   contactName?: string;
   companyName?: string;
   crmUrl?: string;
+  avatarUrl?: string;
   onAnswer: () => void;
   onReject: () => void;
   onHangup: () => void;
@@ -22,6 +23,7 @@ export function SoftphoneControls({
   contactName,
   companyName,
   crmUrl,
+  avatarUrl,
   onAnswer,
   onReject,
   onHangup,
@@ -113,22 +115,35 @@ export function SoftphoneControls({
       </div>
 
       {/* Caller info */}
-      <p className="text-sm font-mono font-semibold text-gray-900">
-        {call.callerNumber || "Unknown Caller"}
-      </p>
-      {contactName && (
-        <p className="text-sm text-gray-700 font-medium">{contactName}</p>
-      )}
-      {companyName && (
-        <p className="text-xs text-gray-500">{companyName}</p>
-      )}
-      <div className="mb-2">
-        {crmUrl && (
-          <a href={crmUrl} target="_blank" rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline">
-            Open CRM
-          </a>
-        )}
+      <div className="flex items-start gap-3 mb-2">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={contactName || "Contact"}
+            className="w-10 h-10 rounded-full object-cover shrink-0"
+          />
+        ) : contactName ? (
+          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">
+            {contactName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          <p className="text-sm font-mono font-semibold text-gray-900">
+            {call.callerNumber || "Unknown Caller"}
+          </p>
+          {contactName && (
+            <p className="text-sm text-gray-700 font-medium">{contactName}</p>
+          )}
+          {companyName && (
+            <p className="text-xs text-gray-500">{companyName}</p>
+          )}
+          {crmUrl && (
+            <a href={crmUrl} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline">
+              Open CRM
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Call quality indicator (active calls only) */}

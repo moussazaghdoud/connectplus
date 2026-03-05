@@ -130,6 +130,7 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
               phone: mapped.phone ?? phone,
               company: mapped.company ?? existing.company,
               title: mapped.title ?? existing.title,
+              avatarUrl: mapped.avatarUrl ?? existing.avatarUrl,
               metadata: (mapped.metadata ?? {}) as any,
             },
           });
@@ -143,6 +144,7 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
               phone: mapped.phone ?? phone,
               company: mapped.company ?? null,
               title: mapped.title ?? null,
+              avatarUrl: mapped.avatarUrl ?? null,
               metadata: (mapped.metadata ?? {}) as any,
             },
           });

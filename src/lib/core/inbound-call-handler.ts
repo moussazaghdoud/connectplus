@@ -119,6 +119,7 @@ class InboundCallHandler {
             company: contact.company ?? undefined,
             phone: contact.phone ?? undefined,
             crmUrl: buildCrmUrl(contact),
+            avatarUrl: contact.avatarUrl ?? undefined,
           }
         : null,
     };

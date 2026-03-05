@@ -8,6 +8,7 @@ export interface CallNotificationData {
   contactName?: string;
   companyName?: string;
   crmUrl?: string;
+  avatarUrl?: string;
   status: "RINGING" | "ACTIVE" | "COMPLETED";
   startedAt: number;
 }

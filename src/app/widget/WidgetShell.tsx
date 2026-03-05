@@ -51,6 +51,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
     displayName?: string;
     company?: string;
     crmUrl?: string;
+    avatarUrl?: string;
   } | null>(null);
 
   // WebRTC hook — pass null since widget uses session cookie, not API key
@@ -104,6 +105,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
               displayName: data.contact.displayName,
               company: data.contact.company,
               crmUrl: data.contact.crmUrl,
+              avatarUrl: data.contact.avatarUrl,
             });
           }
           return;
@@ -115,6 +117,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
           contactName: data.contact?.displayName || data.contactName,
           companyName: data.contact?.company || data.companyName,
           crmUrl: data.contact?.crmUrl || data.crmUrl,
+          avatarUrl: data.contact?.avatarUrl || data.avatarUrl,
           status: "RINGING",
           startedAt: Date.now(),
         };
@@ -494,6 +497,7 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
                   contactName={resolvedContact?.displayName}
                   companyName={resolvedContact?.company}
                   crmUrl={resolvedContact?.crmUrl}
+                  avatarUrl={resolvedContact?.avatarUrl}
                   onAnswer={webrtc.answer}
                   onReject={webrtc.reject}
                   onHangup={webrtc.hangup}
@@ -609,15 +613,27 @@ function CallNotificationInline({
           </svg>
         </button>
       </div>
-      <p className="text-xs font-mono font-semibold text-gray-900">
-        {call.callerNumber}
-      </p>
-      {call.contactName && (
-        <p className="text-xs text-gray-600">{call.contactName}</p>
-      )}
-      {call.companyName && (
-        <p className="text-xs text-gray-500">{call.companyName}</p>
-      )}
+      <div className="flex items-start gap-2">
+        {call.avatarUrl ? (
+          <img src={call.avatarUrl} alt={call.contactName || "Contact"}
+            className="w-8 h-8 rounded-full object-cover shrink-0" />
+        ) : call.contactName ? (
+          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
+            {call.contactName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          <p className="text-xs font-mono font-semibold text-gray-900">
+            {call.callerNumber}
+          </p>
+          {call.contactName && (
+            <p className="text-xs text-gray-600">{call.contactName}</p>
+          )}
+          {call.companyName && (
+            <p className="text-xs text-gray-500">{call.companyName}</p>
+          )}
+        </div>
+      </div>
       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-inherit">
         {call.status === "ACTIVE" && (
           <span className="text-xs font-mono text-green-700">{formatTime(elapsed)}</span>

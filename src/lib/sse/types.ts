@@ -9,6 +9,7 @@ export interface ScreenPopData {
     company?: string;
     phone?: string;
     crmUrl?: string;
+    avatarUrl?: string;
   } | null;
 }
 
