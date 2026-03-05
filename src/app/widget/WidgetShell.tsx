@@ -202,6 +202,20 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── BroadcastChannel: listen for call commands from /cti-widget ──
+  useEffect(() => {
+    const channel = new BroadcastChannel("connectplus-cti");
+    channel.onmessage = (e) => {
+      const { action } = e.data ?? {};
+      if (action === "answer") {
+        webrtc.answer();
+      } else if (action === "hangup") {
+        webrtc.hangup();
+      }
+    };
+    return () => channel.close();
+  }, [webrtc]);
+
   // ── Rainbow connection ──────────────────────────────────
 
   const connectRainbow = useCallback(async () => {

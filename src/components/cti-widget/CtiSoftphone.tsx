@@ -135,12 +135,26 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     [callAction]
   );
 
+  // BroadcastChannel to communicate with /widget tab for real Rainbow call control
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  useEffect(() => {
+    channelRef.current = new BroadcastChannel("connectplus-cti");
+    return () => { channelRef.current?.close(); };
+  }, []);
+
   const handleAnswer = useCallback(() => {
-    if (activeCall) callAction("answer", { callId: activeCall.callId });
+    if (activeCall) {
+      // Tell /widget to answer via Rainbow SDK
+      channelRef.current?.postMessage({ action: "answer", callId: activeCall.callId });
+      callAction("answer", { callId: activeCall.callId });
+    }
   }, [activeCall, callAction]);
 
   const handleHangup = useCallback(() => {
-    if (activeCall) callAction("hangup", { callId: activeCall.callId });
+    if (activeCall) {
+      channelRef.current?.postMessage({ action: "hangup", callId: activeCall.callId });
+      callAction("hangup", { callId: activeCall.callId });
+    }
   }, [activeCall, callAction]);
 
   const handleHold = useCallback(() => {
