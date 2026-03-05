@@ -6,8 +6,8 @@
  * @see https://nextjs.org/docs/app/guides/instrumentation
  */
 export async function register() {
-  // Only run on the server
-  if (typeof window !== "undefined") return;
+  // Only run in the Node.js runtime (skip Edge runtime where node:path etc. are unavailable)
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   try {
     const { initializeConnectors } = await import("@/lib/connectors");
@@ -25,8 +25,4 @@ export async function register() {
   } catch (err) {
     console.error("[ConnectPlus] SSE/Inbound handler initialization failed:", err);
   }
-
-  // Rainbow S2S sessions are user-initiated from the /agent page.
-  // Each agent provides their own Rainbow login/password — credentials
-  // stay in memory only, never persisted. See s2s-connector.ts.
 }
