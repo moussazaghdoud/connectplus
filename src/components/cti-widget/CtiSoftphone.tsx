@@ -49,6 +49,49 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     duration: number;
   } | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const activeCallRef = useRef<ActiveCall | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    activeCallRef.current = activeCall;
+  }, [activeCall]);
+
+  const handleCallEvent = useCallback((event: CtiCallEvent) => {
+    if (event.state === "ringing" || event.state === "connected" || event.state === "held") {
+      setActiveCall({
+        callId: event.callId,
+        correlationId: event.correlationId,
+        direction: event.direction,
+        fromNumber: event.fromNumber,
+        toNumber: event.toNumber,
+        state: event.state,
+        crmContext: event.crmContext,
+        startedAt: event.timestamp,
+        isMuted: false,
+        isOnHold: event.state === "held",
+      });
+      setTab("active");
+    } else if (event.state === "ended" || event.state === "missed" || event.state === "failed") {
+      const endedCall = activeCallRef.current;
+      setActiveCall(null);
+      setRecentCalls((prev) => [event, ...prev].slice(0, 20));
+
+      // Show wrap-up panel after call ends
+      if (endedCall) {
+        const phone = endedCall.direction === "inbound" ? endedCall.fromNumber : endedCall.toNumber;
+        const startMs = new Date(endedCall.startedAt).getTime();
+        const duration = Math.max(0, Math.round((Date.now() - startMs) / 1000));
+        setWrapUp({
+          correlationId: endedCall.correlationId,
+          direction: endedCall.direction,
+          phone,
+          contactName: endedCall.crmContext?.displayName,
+          duration,
+        });
+      }
+      setTab("phone");
+    }
+  }, []);
 
   // Connect to CTI SSE stream
   useEffect(() => {
@@ -94,44 +137,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       es.close();
       eventSourceRef.current = null;
     };
-  }, [agentId]);
-
-  const handleCallEvent = useCallback((event: CtiCallEvent) => {
-    if (event.state === "ringing" || event.state === "connected" || event.state === "held") {
-      setActiveCall({
-        callId: event.callId,
-        correlationId: event.correlationId,
-        direction: event.direction,
-        fromNumber: event.fromNumber,
-        toNumber: event.toNumber,
-        state: event.state,
-        crmContext: event.crmContext,
-        startedAt: event.timestamp,
-        isMuted: false,
-        isOnHold: event.state === "held",
-      });
-      setTab("active");
-    } else if (event.state === "ended" || event.state === "missed" || event.state === "failed") {
-      const endedCall = activeCall;
-      setActiveCall(null);
-      setRecentCalls((prev) => [event, ...prev].slice(0, 20));
-
-      // Show wrap-up panel after call ends
-      if (endedCall) {
-        const phone = endedCall.direction === "inbound" ? endedCall.fromNumber : endedCall.toNumber;
-        const startMs = new Date(endedCall.startedAt).getTime();
-        const duration = Math.max(0, Math.round((Date.now() - startMs) / 1000));
-        setWrapUp({
-          correlationId: endedCall.correlationId,
-          direction: endedCall.direction,
-          phone,
-          contactName: endedCall.crmContext?.displayName,
-          duration,
-        });
-      }
-      setTab("phone");
-    }
-  }, [activeCall]);
+  }, [agentId, handleCallEvent]);
 
   const callAction = useCallback(
     async (action: string, body: Record<string, unknown> = {}) => {
