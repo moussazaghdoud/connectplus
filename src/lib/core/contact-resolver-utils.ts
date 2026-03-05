@@ -114,14 +114,26 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
           "[ContactResolver] Contact resolved from CRM"
         );
 
-        // Upsert local cache: update if exists, create if new
-        const existing = await prisma.contact.findFirst({
-          where: { tenantId, phone },
-        });
+        // Upsert local cache: match by CRM externalId (not phone) to avoid
+        // overwriting a different contact when phone numbers are reassigned
+        let existing: { id: string; email: string | null; company: string | null; title: string | null; avatarUrl: string | null } | null = null;
+
+        if (mapped.externalId) {
+          const link = await prisma.externalLink.findFirst({
+            where: {
+              source: config.connectorId,
+              externalId: mapped.externalId,
+            },
+            include: { contact: true },
+          });
+          if (link?.contact?.tenantId === tenantId) {
+            existing = link.contact;
+          }
+        }
 
         let saved;
         if (existing) {
-          // Update cached contact with fresh CRM data
+          // Update the existing contact record matched by CRM ID
           saved = await prisma.contact.update({
             where: { id: existing.id },
             data: {
@@ -134,8 +146,9 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
               metadata: (mapped.metadata ?? {}) as any,
             },
           });
-          logger.info({ contactId: saved.id }, "[ContactResolver] Local cache updated");
+          logger.info({ contactId: saved.id }, "[ContactResolver] Local cache updated (by externalId)");
         } else {
+          // New contact — create it
           saved = await prisma.contact.create({
             data: {
               tenantId,
@@ -148,7 +161,20 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
               metadata: (mapped.metadata ?? {}) as any,
             },
           });
+          logger.info({ contactId: saved.id }, "[ContactResolver] New contact cached");
         }
+
+        // Clear stale phone from other local contacts that had this number
+        // (the CRM is the source of truth — if phone N now belongs to Contact B,
+        //  Contact A should no longer have it in the local cache)
+        await prisma.contact.updateMany({
+          where: {
+            tenantId,
+            phone,
+            id: { not: saved.id },
+          },
+          data: { phone: null },
+        });
 
         // Upsert external link
         if (mapped.externalId) {
