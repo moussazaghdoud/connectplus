@@ -69,6 +69,13 @@ export function buildOAuth2AuthUrl(
     scope: oauth2.scopes.join(" "),
   });
 
+  // Add extra auth params (e.g. access_type=offline for Zoho refresh tokens)
+  if (oauth2.extraAuthParams) {
+    for (const [key, value] of Object.entries(oauth2.extraAuthParams)) {
+      params.set(key, value);
+    }
+  }
+
   return `${oauth2.authorizeUrl}?${params.toString()}`;
 }
 

@@ -11,6 +11,7 @@ const oauth2Schema = z.object({
   scopes: z.array(z.string()).min(1),
   tokenPlacement: z.enum(["header", "query"]),
   tokenPrefix: z.string().default("Bearer"),
+  extraAuthParams: z.record(z.string(), z.string()).optional(),
 });
 
 const apiKeySchema = z.object({

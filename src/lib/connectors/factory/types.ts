@@ -15,6 +15,8 @@ export interface OAuth2Config {
   tokenPlacement: "header" | "query";
   /** Prefix before the token value, e.g. "Bearer" */
   tokenPrefix: string;
+  /** Extra params to include in authorize URL, e.g. { access_type: "offline" } */
+  extraAuthParams?: Record<string, string>;
 }
 
 export interface ApiKeyConfig {
