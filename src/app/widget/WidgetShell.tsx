@@ -40,6 +40,13 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
   // Tab
   const [activeTab, setActiveTab] = useState<Tab>("calls");
 
+  // Resolved contact for WebRTC mode (populated from server-side CRM lookup via SSE)
+  const [resolvedContact, setResolvedContact] = useState<{
+    displayName?: string;
+    company?: string;
+    crmUrl?: string;
+  } | null>(null);
+
   // WebRTC hook — pass null since widget uses session cookie, not API key
   const webrtc = useRainbowWebSDK(null);
 
@@ -79,7 +86,18 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
         const data = JSON.parse(e.data);
         const callId = data.interactionId || data.callId || "unknown";
 
-        if (rbMode === "webrtc" && rbStatus === "connected") return;
+        // In WebRTC mode, update the resolved contact info on the active WebRTC call
+        // (the server resolved the contact from CRM after receiving the call event)
+        if (rbMode === "webrtc" && rbStatus === "connected") {
+          if (data.contact) {
+            setResolvedContact({
+              displayName: data.contact.displayName,
+              company: data.contact.company,
+              crmUrl: data.contact.crmUrl,
+            });
+          }
+          return;
+        }
 
         const notification: CallNotificationData = {
           callId,
@@ -267,6 +285,13 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
       if (webrtc.status === "error") setRbStatus("error");
     }
   }, [webrtc.error, webrtc.status, rbMode]);
+
+  // Clear resolved contact when WebRTC call ends
+  useEffect(() => {
+    if (webrtc.callState === "idle" || webrtc.callState === "ended") {
+      setResolvedContact(null);
+    }
+  }, [webrtc.callState]);
 
   // ── Handlers ───────────────────────────────────────────
 
@@ -456,6 +481,9 @@ export function WidgetShell({ user }: { user: WidgetUser }) {
                 <SoftphoneControls
                   call={webrtc.currentCall}
                   callQuality={webrtc.callQuality}
+                  contactName={resolvedContact?.displayName}
+                  companyName={resolvedContact?.company}
+                  crmUrl={resolvedContact?.crmUrl}
                   onAnswer={webrtc.answer}
                   onReject={webrtc.reject}
                   onHangup={webrtc.hangup}

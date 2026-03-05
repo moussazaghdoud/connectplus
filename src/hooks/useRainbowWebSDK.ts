@@ -241,15 +241,19 @@ export function useRainbowWebSDK(
       if (reportedStatesRef.current.has(dedupKey)) return;
       reportedStatesRef.current.add(dedupKey);
 
-      if (!apiKey) return;
-
       try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        // Use API key if available; otherwise session cookie is sent automatically
+        if (apiKey) {
+          headers["x-api-key"] = apiKey;
+        }
+
         await fetch("/api/v1/calls/event", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-          },
+          headers,
+          credentials: "same-origin",
           body: JSON.stringify({
             callId,
             state,

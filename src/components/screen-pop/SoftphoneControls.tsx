@@ -6,6 +6,9 @@ import type { CallState, WebRTCCallInfo, CallQualityStats } from "@/hooks/useRai
 interface SoftphoneControlsProps {
   call: WebRTCCallInfo;
   callQuality?: CallQualityStats | null;
+  contactName?: string;
+  companyName?: string;
+  crmUrl?: string;
   onAnswer: () => void;
   onReject: () => void;
   onHangup: () => void;
@@ -16,6 +19,9 @@ interface SoftphoneControlsProps {
 export function SoftphoneControls({
   call,
   callQuality,
+  contactName,
+  companyName,
+  crmUrl,
   onAnswer,
   onReject,
   onHangup,
@@ -107,9 +113,23 @@ export function SoftphoneControls({
       </div>
 
       {/* Caller info */}
-      <p className="text-sm font-mono font-semibold text-gray-900 mb-2">
+      <p className="text-sm font-mono font-semibold text-gray-900">
         {call.callerNumber || "Unknown Caller"}
       </p>
+      {contactName && (
+        <p className="text-sm text-gray-700 font-medium">{contactName}</p>
+      )}
+      {companyName && (
+        <p className="text-xs text-gray-500">{companyName}</p>
+      )}
+      <div className="mb-2">
+        {crmUrl && (
+          <a href={crmUrl} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline">
+            Open CRM
+          </a>
+        )}
+      </div>
 
       {/* Call quality indicator (active calls only) */}
       {callQuality && (call.state === "active" || call.state === "on_hold") && (
