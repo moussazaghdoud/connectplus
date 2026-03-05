@@ -76,6 +76,7 @@ export function removeSubscriber(id: string): void {
 
 /**
  * Broadcast a call event to all matching subscribers (same tenant + agent).
+ * If agentId is "*", broadcast to all agents in the tenant.
  */
 export function broadcastCallEvent(event: CtiCallEvent): number {
   const subs = getSubscribers();
@@ -84,7 +85,7 @@ export function broadcastCallEvent(event: CtiCallEvent): number {
 
   for (const [id, sub] of subs) {
     if (sub.tenantId !== event.tenantId) continue;
-    if (sub.agentId !== event.agentId) continue;
+    if (event.agentId !== "*" && sub.agentId !== event.agentId) continue;
 
     const ok = sendSSE(sub.controller, "call.event", event);
     if (ok) {
@@ -141,6 +142,10 @@ export function sendHeartbeats(): void {
 /**
  * Broadcast a screen pop event to matching subscribers.
  */
+/**
+ * Broadcast a screen pop event to matching subscribers.
+ * If agentId is "*", broadcast to all agents in the tenant.
+ */
 export function broadcastScreenPop(
   tenantId: string,
   agentId: string,
@@ -164,7 +169,8 @@ export function broadcastScreenPop(
   const dead: string[] = [];
 
   for (const [id, sub] of subs) {
-    if (sub.tenantId !== tenantId || sub.agentId !== agentId) continue;
+    if (sub.tenantId !== tenantId) continue;
+    if (agentId !== "*" && sub.agentId !== agentId) continue;
 
     const ok = sendSSE(sub.controller, "screen_pop", {
       type: "screen_pop",

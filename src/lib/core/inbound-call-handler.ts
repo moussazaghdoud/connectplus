@@ -10,6 +10,8 @@ import {
   resolveCallerByPhone,
   buildCrmUrl,
 } from "./contact-resolver-utils";
+import { processEvent } from "../cti/bridge/event-processor";
+import type { RawTelephonyEvent } from "../cti/bridge/event-processor";
 
 /**
  * Inbound Call Handler — listens to Rainbow S2S callbacks for incoming calls,
@@ -74,6 +76,34 @@ class InboundCallHandler {
     }
   }
 
+  /**
+   * Forward a Rainbow event to the CTI bridge so /cti-widget subscribers also receive it.
+   * Uses agentId "*" to broadcast to all CTI subscribers in the tenant.
+   */
+  private async forwardToCti(
+    tenantId: string,
+    callId: string,
+    state: "ringing" | "connected" | "ended",
+    callerNumber: string
+  ): Promise<void> {
+    try {
+      const raw: RawTelephonyEvent = {
+        callId,
+        direction: "inbound",
+        fromNumber: callerNumber,
+        toNumber: "",
+        timestamp: new Date().toISOString(),
+        state,
+        agentId: "*",
+        tenantId,
+      };
+      await processEvent(raw);
+      logger.debug({ tenantId, callId, state }, "Rainbow event forwarded to CTI bridge");
+    } catch (err) {
+      logger.warn({ err, tenantId, callId, state }, "Failed to forward Rainbow event to CTI bridge");
+    }
+  }
+
   private async handleRinging(
     tenantId: string,
     body: Record<string, unknown>
@@ -91,6 +121,9 @@ class InboundCallHandler {
     }
 
     const normalized = normalizePhone(callerNumber);
+
+    // Forward to CTI bridge for /cti-widget subscribers
+    await this.forwardToCti(tenantId, callId ?? "unknown", "ringing", normalized);
     logger.info(
       { tenantId, callId, rawCallerNumber: callerNumber, normalizedPhone: normalized },
       "[InboundCall] handleRinging: resolving contact"
@@ -165,6 +198,10 @@ class InboundCallHandler {
   ): Promise<void> {
     const callId = (body.callId as string) ?? (body.call_id as string);
     if (!callId) return;
+
+    // Forward to CTI bridge for /cti-widget subscribers
+    const ctiState = newStatus === "ACTIVE" ? "connected" : "ended";
+    await this.forwardToCti(tenantId, callId, ctiState, "");
 
     // Find the interaction by rainbowCallId
     const interaction = await prisma.interaction.findFirst({
