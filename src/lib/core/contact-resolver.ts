@@ -20,7 +20,15 @@ export class ContactResolver {
 
     // 2. If specific connector requested, search it
     if (query.connectorId) {
-      const connector = connectorRegistry.tryGet(query.connectorId);
+      let connector = connectorRegistry.tryGet(query.connectorId);
+      if (!connector) {
+        // Try loading dynamic connector from DB definition
+        try {
+          const { dynamicLoader } = await import("../connectors/factory/dynamic-loader");
+          await dynamicLoader.reload(query.connectorId);
+          connector = connectorRegistry.tryGet(query.connectorId);
+        } catch { /* skip */ }
+      }
       if (connector) {
         try {
           const externals = await connector.searchContacts({

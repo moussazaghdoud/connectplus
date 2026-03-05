@@ -58,14 +58,15 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
   });
 
   for (const config of configs) {
-    const connector = connectorRegistry.tryGet(config.connectorId);
+    let connector = connectorRegistry.tryGet(config.connectorId);
     if (!connector) {
-      // Try loading dynamic connector
+      // Try loading dynamic connector from DB definition
       try {
         const { dynamicLoader } = await import("../connectors/factory/dynamic-loader");
         await dynamicLoader.reload(config.connectorId);
+        connector = connectorRegistry.tryGet(config.connectorId);
       } catch { /* skip */ }
-      continue;
+      if (!connector) continue;
     }
 
     try {
