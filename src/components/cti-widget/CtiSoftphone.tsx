@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { DialPad } from "./DialPad";
 import { ActiveCallPanel } from "./ActiveCallPanel";
 import { RecentCalls } from "./RecentCalls";
+import { ScreenPopup, type ScreenPopData } from "./ScreenPopup";
 import type { CtiCallEvent } from "@/lib/cti/types/call-event";
 
 type Tab = "phone" | "active" | "recent";
@@ -38,6 +39,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
   const [recentCalls, setRecentCalls] = useState<CtiCallEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [screenPop, setScreenPop] = useState<ScreenPopData | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Connect to CTI SSE stream
@@ -62,6 +64,11 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     es.addEventListener("call.event", (e) => {
       const event: CtiCallEvent = JSON.parse(e.data);
       handleCallEvent(event);
+    });
+
+    es.addEventListener("screen_pop", (e) => {
+      const data: ScreenPopData = JSON.parse(e.data);
+      setScreenPop(data);
     });
 
     es.addEventListener("heartbeat", () => {
@@ -172,8 +179,45 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     [activeCall, callAction]
   );
 
+  const handleOpenCrmRecord = useCallback(() => {
+    if (!screenPop?.contact) return;
+    const { recordId, module, crm, crmUrl } = screenPop.contact;
+
+    if (crmUrl) {
+      window.open(crmUrl, "_blank");
+    } else if (crm === "zoho" && recordId) {
+      // Zoho CRM URL pattern
+      window.parent?.postMessage(
+        { type: "openCrmRecord", module, recordId },
+        "*"
+      );
+    }
+
+    // Log record_opened event
+    fetch("/api/v1/cti/call/record-opened", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        callId: screenPop.callId,
+        agentId,
+        recordId,
+        module,
+      }),
+    }).catch(() => {}); // fire-and-forget
+  }, [screenPop, agentId]);
+
   return (
-    <div className="flex flex-col h-screen w-full max-w-sm mx-auto bg-white">
+    <div className="flex flex-col h-screen w-full max-w-sm mx-auto bg-white relative">
+      {/* Screen Pop Overlay */}
+      <ScreenPopup
+        data={screenPop}
+        onAnswer={handleAnswer}
+        onDecline={handleHangup}
+        onOpenRecord={handleOpenCrmRecord}
+        onDismiss={() => setScreenPop(null)}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
         <div className="flex items-center gap-2">

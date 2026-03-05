@@ -139,6 +139,54 @@ export function sendHeartbeats(): void {
 }
 
 /**
+ * Broadcast a screen pop event to matching subscribers.
+ */
+export function broadcastScreenPop(
+  tenantId: string,
+  agentId: string,
+  data: {
+    callId: string;
+    correlationId: string;
+    phone: string;
+    direction: string;
+    contact?: {
+      name: string;
+      recordId: string;
+      module: string;
+      company?: string;
+      crmUrl?: string;
+      crm: string;
+    };
+  }
+): number {
+  const subs = getSubscribers();
+  let sent = 0;
+  const dead: string[] = [];
+
+  for (const [id, sub] of subs) {
+    if (sub.tenantId !== tenantId || sub.agentId !== agentId) continue;
+
+    const ok = sendSSE(sub.controller, "screen_pop", {
+      type: "screen_pop",
+      ...data,
+    });
+    if (ok) sent++;
+    else dead.push(id);
+  }
+
+  for (const id of dead) subs.delete(id);
+
+  if (sent > 0) {
+    log.info(
+      { callId: data.callId, contact: data.contact?.name, sent },
+      "Screen pop broadcast"
+    );
+  }
+
+  return sent;
+}
+
+/**
  * Get subscriber count for a tenant.
  */
 export function getSubscriberCount(tenantId: string): number {

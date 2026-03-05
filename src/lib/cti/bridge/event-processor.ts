@@ -9,7 +9,8 @@
 import type { CtiCallEvent, CallState, CallDirection, CrmContext } from "../types/call-event";
 import { getCorrelationId, isDuplicateEvent, clearCorrelation } from "../correlation/correlator";
 import { updateCallState, getCall } from "../state/call-state-store";
-import { broadcastCallEvent } from "./websocket-manager";
+import { broadcastCallEvent, broadcastScreenPop } from "./websocket-manager";
+import { setCallContext, enrichCallContext, removeCallContext } from "../session/call-context";
 import { metrics } from "../../observability/metrics";
 import { logger } from "../../observability/logger";
 
@@ -118,6 +119,54 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
 
   // 5. Update call state store
   updateCallState(event);
+
+  // 5b. Store call context + trigger screen pop on ringing
+  if (raw.state === "ringing") {
+    const lookupNumber = raw.direction === "inbound" ? raw.fromNumber : raw.toNumber;
+    setCallContext({
+      callId: raw.callId,
+      correlationId,
+      phone: lookupNumber,
+      direction: raw.direction,
+      agentId: raw.agentId,
+      tenantId: raw.tenantId,
+      startTime: raw.timestamp,
+      contactId: event.crmContext?.recordId,
+      contactName: event.crmContext?.displayName,
+      contactCompany: event.crmContext?.company,
+      crmModule: event.crmContext?.module,
+      crmRecordId: event.crmContext?.recordId,
+      screenPopSent: false,
+    });
+
+    // Broadcast screen_pop event
+    const popData = {
+      callId: raw.callId,
+      correlationId,
+      phone: lookupNumber,
+      direction: raw.direction,
+      contact: event.crmContext
+        ? {
+            name: event.crmContext.displayName || "Unknown",
+            recordId: event.crmContext.recordId || "",
+            module: event.crmContext.module || "",
+            company: event.crmContext.company,
+            crm: "zoho",
+          }
+        : undefined,
+    };
+    broadcastScreenPop(raw.tenantId, raw.agentId, popData);
+    metrics.increment("cti_screen_pop_sent");
+    log.info(
+      { correlationId, phone: lookupNumber, hasContact: !!event.crmContext },
+      "Screen pop triggered"
+    );
+  }
+
+  // 5c. Clean up call context on terminal states
+  if (raw.state === "ended" || raw.state === "missed" || raw.state === "failed") {
+    removeCallContext(raw.callId);
+  }
 
   // 6. Broadcast to widget
   const sent = broadcastCallEvent(event);
