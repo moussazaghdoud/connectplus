@@ -238,8 +238,13 @@ export function useRainbowWebSDK(
   const reportCallEvent = useCallback(
     async (callId: string, state: string, callerNumber?: string) => {
       const dedupKey = `${callId}:${state}`;
-      if (reportedStatesRef.current.has(dedupKey)) return;
+      if (reportedStatesRef.current.has(dedupKey)) {
+        console.log("[WebRTC] reportCallEvent SKIPPED (dedup):", dedupKey);
+        return;
+      }
       reportedStatesRef.current.add(dedupKey);
+
+      console.log("[WebRTC] reportCallEvent:", { callId, state, callerNumber, hasApiKey: !!apiKey });
 
       try {
         const headers: Record<string, string> = {
@@ -250,7 +255,7 @@ export function useRainbowWebSDK(
           headers["x-api-key"] = apiKey;
         }
 
-        await fetch("/api/v1/calls/event", {
+        const resp = await fetch("/api/v1/calls/event", {
           method: "POST",
           headers,
           credentials: "same-origin",
@@ -262,8 +267,9 @@ export function useRainbowWebSDK(
             timestamp: Date.now(),
           }),
         });
-      } catch {
-        // Best-effort — don't break the call flow
+        console.log("[WebRTC] reportCallEvent response:", resp.status);
+      } catch (err) {
+        console.error("[WebRTC] reportCallEvent FAILED:", err);
       }
     },
     [apiKey]
