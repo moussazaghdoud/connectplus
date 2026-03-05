@@ -1,0 +1,64 @@
+{
+  "slug": "zoho-cti",
+  "category": "telephony",
+  "displayName": "Zoho CTI",
+  "description": "Rainbow CTI integration for Zoho CRM — embedded softphone, click-to-call, call logging, and recording links",
+  "vendor": "Zoho Corporation",
+  "vendorUrl": "https://www.zoho.com/crm/",
+  "docsUrl": "https://www.zoho.com/crm/developer/docs/",
+  "auth": {
+    "type": "oauth2",
+    "scopes": ["ZohoCRM.modules.ALL", "ZohoCRM.settings.ALL"],
+    "dcAware": true
+  },
+  "capabilities": [
+    "click_to_call",
+    "incoming_popup",
+    "call_logging",
+    "recording_link",
+    "call_transfer",
+    "dtmf",
+    "health_check"
+  ],
+  "settings": [
+    {
+      "key": "zohoDc",
+      "type": "select",
+      "label": "Zoho Data Center",
+      "description": "Select your Zoho data center region",
+      "options": ["com", "eu", "in", "com.au", "jp", "ca"],
+      "required": true,
+      "default": "eu"
+    },
+    {
+      "key": "rainbowTenant",
+      "type": "string",
+      "label": "Rainbow Tenant ID",
+      "description": "Your Rainbow CPaaS tenant identifier",
+      "required": true,
+      "placeholder": "e.g. 5f3a2b1c..."
+    },
+    {
+      "key": "callLogSubject",
+      "type": "string",
+      "label": "Call Log Subject Prefix",
+      "description": "Prefix for call log subjects in Zoho CRM",
+      "required": false,
+      "default": "Rainbow Call"
+    }
+  ],
+  "endpoints": {
+    "activate": true,
+    "deactivate": true,
+    "diagnostics": true,
+    "auditLogs": true,
+    "webhooks": true,
+    "test": true
+  },
+  "prerequisites": [
+    "Zoho CRM Professional or Enterprise plan",
+    "Rainbow CPaaS account with telephony enabled",
+    "Admin access to Zoho CRM for OAuth setup"
+  ],
+  "notes": "Supports all 6 Zoho data centers. Uses OAuth2 with offline access for token refresh."
+}

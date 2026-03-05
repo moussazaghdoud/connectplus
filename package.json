@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "postinstall": "node -e \"try{require('./scripts/copy-rainbow-web-sdk.js')}catch(e){}\"",
-    "seed:marketplace": "npx tsx prisma/seed-marketplace.ts"
+    "seed:marketplace": "npx tsx prisma/seed-marketplace.ts",
+    "gen:connector": "npx tsx scripts/generate-connector.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",

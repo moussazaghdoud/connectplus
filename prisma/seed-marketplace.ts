@@ -733,6 +733,41 @@ async function main() {
   }
 
   console.log("\nDone. Seeded", connectors.length, "connector definitions.");
+
+  
+  // Generated from blueprint: salesforce-crm
+  await prisma.connectorDefinition.upsert({
+    where: { slug: "salesforce-crm" },
+    update: {
+      name: "Salesforce CRM",
+      shortDesc: "Contact search, activity logging, and deal sync with Salesforce CRM",
+      category: "CRM",
+      tier: "CONFIG_DRIVEN",
+      authType: "oauth2",
+      vendorUrl: "https://www.salesforce.com/",
+      docsUrl: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest.htm",
+      prerequisites: ["Salesforce Enterprise Edition or higher","Connected App configured with OAuth2","API access enabled for user"],
+    },
+    create: {
+      slug: "salesforce-crm",
+      name: "Salesforce CRM",
+      description: "Contact search, activity logging, and deal sync with Salesforce CRM",
+      shortDesc: "Contact search, activity logging, and deal sync with Salesforce CRM",
+      status: "DRAFT",
+      version: 1,
+      config: {},
+      category: "CRM",
+      tier: "CONFIG_DRIVEN",
+      authType: "oauth2",
+      vendorUrl: "https://www.salesforce.com/",
+      docsUrl: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest.htm",
+      prerequisites: ["Salesforce Enterprise Edition or higher","Connected App configured with OAuth2","API access enabled for user"],
+      setupSteps: [],
+    },
+  });
+  console.log("  Upserted salesforce-crm");
+
+  // --- END GENERATED CONNECTORS ---
 }
 
 main()
