@@ -765,9 +765,10 @@ async function main() {
           iconName: c.iconName,
           prerequisites: c.prerequisites as never,
           setupSteps: c.setupSteps as never,
+          config: c.config as never,
         },
       });
-      console.log(`  Updated: ${c.slug} (preserved config & status)`);
+      console.log(`  Updated: ${c.slug} (config + metadata updated)`);
     } else {
       await prisma.connectorDefinition.create({
         data: {
