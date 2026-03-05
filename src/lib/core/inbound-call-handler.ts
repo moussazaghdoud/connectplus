@@ -91,13 +91,21 @@ class InboundCallHandler {
     }
 
     const normalized = normalizePhone(callerNumber);
+    logger.info(
+      { tenantId, callId, rawCallerNumber: callerNumber, normalizedPhone: normalized },
+      "[InboundCall] handleRinging: resolving contact"
+    );
 
     // Resolve caller from contacts DB (best-effort, non-blocking for screen pop)
     let contact: Awaited<ReturnType<typeof resolveCallerByPhone>> = null;
     try {
       contact = await resolveCallerByPhone(tenantId, normalized);
+      logger.info(
+        { tenantId, callId, contactFound: !!contact, contactName: contact?.displayName ?? null },
+        "[InboundCall] Contact resolution result"
+      );
     } catch (err) {
-      logger.warn({ err, tenantId }, "Contact resolution failed, proceeding without contact");
+      logger.error({ err, tenantId, callId, normalizedPhone: normalized }, "[InboundCall] Contact resolution FAILED");
     }
 
     // Broadcast screen pop immediately (don't wait for DB interaction creation)
