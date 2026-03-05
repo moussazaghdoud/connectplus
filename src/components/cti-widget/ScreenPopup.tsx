@@ -19,16 +19,12 @@ export interface ScreenPopData {
 
 interface Props {
   data: ScreenPopData | null;
-  onAnswer: () => void;
-  onDecline: () => void;
   onOpenRecord: () => void;
   onDismiss: () => void;
 }
 
 export function ScreenPopup({
   data,
-  onAnswer,
-  onDecline,
   onOpenRecord,
   onDismiss,
 }: Props) {
@@ -115,9 +111,8 @@ export function ScreenPopup({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="px-4 pb-4 flex flex-col gap-2">
-          {/* CRM record button */}
+        {/* Actions — only CRM link, call controls are on the Active tab */}
+        <div className="px-4 pb-4">
           {hasContact && data.contact!.recordId && (
             <button
               onClick={() => {
@@ -128,30 +123,6 @@ export function ScreenPopup({
             >
               <span>🔗</span> Open CRM Record
             </button>
-          )}
-
-          {/* Call actions */}
-          {isInbound && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  onAnswer();
-                  setVisible(false);
-                }}
-                className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-semibold transition-colors"
-              >
-                Answer
-              </button>
-              <button
-                onClick={() => {
-                  onDecline();
-                  setVisible(false);
-                }}
-                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-semibold transition-colors"
-              >
-                Decline
-              </button>
-            </div>
           )}
         </div>
       </div>
