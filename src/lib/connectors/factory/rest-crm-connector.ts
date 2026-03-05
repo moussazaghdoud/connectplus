@@ -143,13 +143,76 @@ export class RestCrmConnector implements ConnectorInterface {
   async searchContacts(query: ContactSearchQuery): Promise<ExternalContact[]> {
     await this.ensureFreshToken();
 
+    // Use multi-strategy search if configured, otherwise fall back to single contactSearch
+    const strategies = this.def.searchStrategies;
+    if (strategies && strategies.length > 0) {
+      return this.searchWithStrategies(query, strategies);
+    }
+
+    return this.searchSingleEndpoint(query, this.def.contactSearch);
+  }
+
+  /**
+   * Multi-strategy search: try each strategy in priority order, return first match.
+   * Handles 204/empty/5xx per-strategy with fallback to next.
+   */
+  private async searchWithStrategies(
+    query: ContactSearchQuery,
+    strategies: import("./types").SearchStrategyConfig[]
+  ): Promise<ExternalContact[]> {
+    const sorted = [...strategies].sort(
+      (a, b) => (a.priority ?? 0) - (b.priority ?? 0)
+    );
+
+    for (const strategy of sorted) {
+      try {
+        const results = await this.searchSingleEndpoint(query, {
+          endpoint: strategy.endpoint,
+          method: strategy.method,
+          request: strategy.request,
+          response: strategy.response,
+        });
+
+        if (results.length > 0) {
+          // Tag results with strategy metadata
+          for (const r of results) {
+            (r as ExternalContact & { _strategy?: typeof strategy })._strategy = strategy;
+          }
+          logger.info(
+            { connector: this.manifest.id, strategy: strategy.label, count: results.length },
+            "Search strategy matched"
+          );
+          return results;
+        }
+
+        logger.debug(
+          { connector: this.manifest.id, strategy: strategy.label },
+          "Search strategy returned no results, trying next"
+        );
+      } catch (err) {
+        logger.warn(
+          { err, connector: this.manifest.id, strategy: strategy.label },
+          "Search strategy failed, trying next"
+        );
+      }
+    }
+
+    return [];
+  }
+
+  /**
+   * Execute a single-endpoint search (used by both legacy contactSearch and each strategy).
+   */
+  private async searchSingleEndpoint(
+    query: ContactSearchQuery,
+    searchConf: import("./types").ContactSearchConfig
+  ): Promise<ExternalContact[]> {
     const creds = this.config?.credentials ?? {};
     const headers = {
       ...buildAuthHeaders(this.def.auth, creds),
       "Content-Type": "application/json",
     };
 
-    const searchConf = this.def.contactSearch;
     const url = resolveEndpoint(this.def.apiBaseUrl, searchConf.endpoint);
 
     const validation = validateUrl(url);
@@ -167,7 +230,7 @@ export class RestCrmConnector implements ConnectorInterface {
         email: query.email ?? "",
         phone: query.phone ?? "",
       });
-      resp = await fetchWithRetry(url, { method: "POST", headers, body });
+      resp = await fetchWithRetry(url, { method: "POST", headers, body, retries: 1 });
     } else {
       const params = new URLSearchParams();
       for (const [key, tmpl] of Object.entries(searchConf.request.queryParams ?? {})) {
@@ -177,13 +240,8 @@ export class RestCrmConnector implements ConnectorInterface {
           phone: query.phone ?? "",
         }));
       }
-      resp = await fetchWithRetry(`${url}?${params.toString()}`, { method: "GET", headers });
+      resp = await fetchWithRetry(`${url}?${params.toString()}`, { method: "GET", headers, retries: 1 });
     }
-
-    logger.info(
-      { status: resp.status, connector: this.manifest.id },
-      "Contact search API response received"
-    );
 
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
@@ -191,36 +249,27 @@ export class RestCrmConnector implements ConnectorInterface {
         { status: resp.status, connector: this.manifest.id, response: errText.slice(0, 500) },
         "Contact search API call failed"
       );
+      // 429/5xx are retryable — throw to trigger strategy fallback
+      if (resp.status === 429 || resp.status >= 500) {
+        throw new Error(`API ${resp.status}: ${errText.slice(0, 200)}`);
+      }
       return [];
     }
 
-    // Handle 204 No Content (e.g. Zoho returns 204 when no results)
-    if (resp.status === 204) {
-      logger.info({ connector: this.manifest.id }, "Contact search returned 204 No Content");
-      return [];
-    }
+    if (resp.status === 204) return [];
 
     const responseText = await resp.text();
-    if (!responseText || responseText.trim() === "") {
-      logger.info({ connector: this.manifest.id }, "Contact search returned empty body");
-      return [];
-    }
+    if (!responseText || responseText.trim() === "") return [];
 
     const data = JSON.parse(responseText);
     const results = getByPath(data, searchConf.response.resultsPath) as unknown[];
-
-    logger.info(
-      { connector: this.manifest.id, resultsPath: searchConf.response.resultsPath, isArray: Array.isArray(results), count: Array.isArray(results) ? results.length : 0 },
-      "Contact search API response parsed"
-    );
 
     if (!Array.isArray(results)) return [];
 
     return results.map((item) => {
       const obj = item as Record<string, unknown>;
-      const idField = searchConf.response.idField;
       return {
-        externalId: String(getByPath(obj, idField) ?? ""),
+        externalId: String(getByPath(obj, searchConf.response.idField) ?? ""),
         source: this.manifest.id,
         raw: obj,
       } as ExternalContact;
@@ -229,9 +278,12 @@ export class RestCrmConnector implements ConnectorInterface {
 
   mapContact(externalContact: ExternalContact): CanonicalContact {
     const raw = externalContact.raw as Record<string, unknown>;
-    const mapped = mapContactFields(raw, this.def.contactFieldMapping as unknown as Record<string, string | undefined>);
+    // Use per-strategy field mapping if tagged, otherwise top-level mapping
+    const strategy = (externalContact as ExternalContact & { _strategy?: import("./types").SearchStrategyConfig })._strategy;
+    const mapping = strategy?.fieldMapping ?? this.def.contactFieldMapping;
+    const mapped = mapContactFields(raw, mapping as unknown as Record<string, string | undefined>);
 
-    return {
+    const contact: CanonicalContact = {
       displayName: mapped.displayName || `Contact ${externalContact.externalId}`,
       email: mapped.email || undefined,
       phone: mapped.phone || undefined,
@@ -240,8 +292,28 @@ export class RestCrmConnector implements ConnectorInterface {
       avatarUrl: mapped.avatarUrl || undefined,
       externalId: externalContact.externalId,
       source: this.manifest.id,
-      metadata: { raw: externalContact.raw },
+      metadata: {
+        crmModule: strategy?.crmModule,
+        crmUrl: this.buildCrmLink(externalContact.externalId, strategy?.crmModule),
+      },
     };
+
+    return contact;
+  }
+
+  /**
+   * Build a CRM deep link using the crmLink template config.
+   */
+  buildCrmLink(recordId: string, crmModule?: string): string | undefined {
+    if (!this.def.crmLink?.urlTemplate) return undefined;
+    const creds = this.config?.credentials ?? {};
+    return applyTemplate(this.def.crmLink.urlTemplate, {
+      recordId,
+      module: crmModule ?? "",
+      orgId: creds.orgId ?? "",
+      instanceUrl: creds.instanceUrl ?? "",
+      subdomain: creds.subdomain ?? "",
+    });
   }
 
   // ── Webhooks ───────────────────────────────────────────

@@ -160,7 +160,6 @@ export function broadcastScreenPop(
       module: string;
       company?: string;
       crmUrl?: string;
-      crm: string;
     };
   }
 ): number {

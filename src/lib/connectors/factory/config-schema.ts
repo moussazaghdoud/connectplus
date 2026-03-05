@@ -98,11 +98,28 @@ const healthCheckSchema = z.object({
   expectedStatus: z.number().int().min(100).max(599).optional(),
 });
 
+const searchStrategySchema = z.object({
+  label: z.string().min(1),
+  priority: z.number().int().min(0).optional(),
+  endpoint: z.string().min(1),
+  method: z.enum(["GET", "POST"]),
+  request: contactSearchRequestSchema,
+  response: contactSearchResponseSchema,
+  fieldMapping: contactFieldMappingSchema.optional(),
+  crmModule: z.string().optional(),
+});
+
+const crmLinkSchema = z.object({
+  urlTemplate: z.string().min(1),
+});
+
 export const connectorDefinitionConfigSchema = z.object({
   apiBaseUrl: z.string().url(),
   auth: authSchema,
   contactSearch: contactSearchSchema,
   contactFieldMapping: contactFieldMappingSchema,
+  searchStrategies: z.array(searchStrategySchema).optional(),
+  crmLink: crmLinkSchema.optional(),
   writeBack: writeBackSchema.optional(),
   webhook: webhookSchema.optional(),
   healthCheck: healthCheckSchema.optional(),

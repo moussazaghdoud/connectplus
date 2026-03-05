@@ -79,11 +79,12 @@ describe("CallSummary", () => {
         crmRecordId: "rec-001",
         contactName: "John Doe",
         contactCompany: "ACME",
+        crmSlug: "zoho-crm",
       });
       const summary = buildCallSummary("call-100", "ended");
 
       expect(summary!.crm).toBeDefined();
-      expect(summary!.crm!.system).toBe("zoho");
+      expect(summary!.crm!.system).toBe("zoho-crm");
       expect(summary!.crm!.module).toBe("Contacts");
       expect(summary!.crm!.recordId).toBe("rec-001");
       expect(summary!.crm!.displayName).toBe("John Doe");

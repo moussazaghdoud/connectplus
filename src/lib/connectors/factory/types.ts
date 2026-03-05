@@ -66,6 +66,31 @@ export interface ContactSearchConfig {
   response: ContactSearchResponseConfig;
 }
 
+// ── Search Strategies (multi-module, ordered) ────────────
+
+export interface SearchStrategyConfig {
+  /** Human label, e.g. "Contacts", "Leads", "Accounts" */
+  label: string;
+  /** Priority (lower = tried first). Default: array index */
+  priority?: number;
+  /** Relative to apiBaseUrl */
+  endpoint: string;
+  method: "GET" | "POST";
+  request: ContactSearchRequestConfig;
+  response: ContactSearchResponseConfig;
+  /** Per-strategy field mapping (overrides top-level contactFieldMapping) */
+  fieldMapping?: ContactFieldMappingConfig;
+  /** CRM module name for deep link building (e.g. "Contacts", "Leads") */
+  crmModule?: string;
+}
+
+// ── CRM Link Template ────────────────────────────────────
+
+export interface CrmLinkConfig {
+  /** URL template, e.g. "https://crm.zoho.eu/crm/org{{orgId}}/tab/{{module}}/{{recordId}}" */
+  urlTemplate: string;
+}
+
 // ── Field Mapping ────────────────────────────────────────
 
 export interface ContactFieldMappingConfig {
@@ -139,8 +164,13 @@ export interface ConnectorDefinitionConfig {
   /** Base URL for API calls, e.g. "https://api.example-crm.com/v2" */
   apiBaseUrl: string;
   auth: AuthConfig;
+  /** Single-endpoint search (backward-compat). Ignored if searchStrategies is present. */
   contactSearch: ContactSearchConfig;
   contactFieldMapping: ContactFieldMappingConfig;
+  /** Multi-module search strategies. Tried in priority order, first match wins. */
+  searchStrategies?: SearchStrategyConfig[];
+  /** CRM deep link template */
+  crmLink?: CrmLinkConfig;
   writeBack?: WriteBackConfig;
   webhook?: WebhookConfig;
   healthCheck?: HealthCheckConfig;

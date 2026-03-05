@@ -11,8 +11,10 @@
 export type CallOutcome = "answered" | "missed" | "failed" | "cancelled";
 
 export interface CallSummaryCrm {
-  system: "zoho";
-  module?: "Contacts" | "Leads" | "Accounts";
+  /** Connector slug (e.g. "zoho-crm", "hubspot", "salesforce") */
+  system: string;
+  /** CRM module where the match was found */
+  module?: string;
   recordId?: string;
   displayName?: string;
   company?: string;

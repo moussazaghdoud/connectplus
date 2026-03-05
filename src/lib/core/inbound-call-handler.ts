@@ -6,10 +6,7 @@ import type { ScreenPopData } from "../sse/types";
 import { normalizePhone } from "../utils/phone";
 import { prisma } from "../db";
 import { logger } from "../observability/logger";
-import {
-  resolveCallerByPhone,
-  buildCrmUrl,
-} from "./contact-resolver-utils";
+import { crmService } from "../crm/service";
 import { processEvent } from "../cti/bridge/event-processor";
 import type { RawTelephonyEvent } from "../cti/bridge/event-processor";
 
@@ -129,10 +126,10 @@ class InboundCallHandler {
       "[InboundCall] handleRinging: resolving contact"
     );
 
-    // Resolve caller from contacts DB (best-effort, non-blocking for screen pop)
-    let contact: Awaited<ReturnType<typeof resolveCallerByPhone>> = null;
+    // Resolve caller via CrmService (single entry point for all CRM operations)
+    let contact: Awaited<ReturnType<typeof crmService.resolveCallerByPhone>> = null;
     try {
-      contact = await resolveCallerByPhone(tenantId, normalized);
+      contact = await crmService.resolveCallerByPhone(tenantId, normalized);
       logger.info(
         { tenantId, callId, contactFound: !!contact, contactName: contact?.displayName ?? null },
         "[InboundCall] Contact resolution result"
@@ -151,7 +148,7 @@ class InboundCallHandler {
             email: contact.email ?? undefined,
             company: contact.company ?? undefined,
             phone: contact.phone ?? undefined,
-            crmUrl: buildCrmUrl(contact),
+            crmUrl: crmService.buildCrmLink(contact),
             avatarUrl: contact.avatarUrl ?? undefined,
           }
         : null,

@@ -192,7 +192,7 @@ export function buildCallSummary(callId: string, state: string): CallSummary | u
   // Attach CRM data if available
   if (ctx.crmRecordId || ctx.crmModule) {
     summary.crm = {
-      system: "zoho",
+      system: ctx.crmSlug ?? "unknown",
       module: ctx.crmModule as "Contacts" | "Leads" | "Accounts" | undefined,
       recordId: ctx.crmRecordId,
       displayName: ctx.contactName,

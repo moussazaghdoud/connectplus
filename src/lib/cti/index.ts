@@ -6,7 +6,6 @@
  */
 
 export { processEvent } from "./bridge/event-processor";
-export { setCrmLookup, setCallLogger } from "./bridge/event-processor";
 export { addSubscriber, removeSubscriber, broadcastCallEvent, getSubscriberCount } from "./bridge/websocket-manager";
 export { getCorrelationId, isDuplicateEvent, clearCorrelation } from "./correlation/correlator";
 export { updateCallState, getCall, getAgentCalls, getTenantCalls } from "./state/call-state-store";

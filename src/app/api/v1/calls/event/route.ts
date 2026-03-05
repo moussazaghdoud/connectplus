@@ -5,7 +5,8 @@ import { apiHandler } from "@/lib/middleware/api-handler";
 import { interactionManager } from "@/lib/core/interaction-manager";
 import { runWithTenant } from "@/lib/core/tenant-context";
 import { sseManager } from "@/lib/sse";
-import { resolveCallerByPhone, buildCrmUrl, normalizePhone } from "@/lib/core/contact-resolver-utils";
+import { crmService } from "@/lib/crm/service";
+import { normalizePhone } from "@/lib/utils/phone";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/observability/logger";
 import type { ScreenPopData } from "@/lib/sse/types";
@@ -74,10 +75,10 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
     case "ringing_incoming": {
       const normalized = normalizePhone(callerNumber ?? "");
 
-      // Resolve contact (best-effort)
-      let contact: Awaited<ReturnType<typeof resolveCallerByPhone>> = null;
+      // Resolve contact via CrmService (single entry point)
+      let contact: Awaited<ReturnType<typeof crmService.resolveCallerByPhone>> = null;
       try {
-        contact = await resolveCallerByPhone(tenantId, normalized);
+        contact = await crmService.resolveCallerByPhone(tenantId, normalized);
       } catch (err) {
         logger.warn({ err, tenantId }, "WebRTC contact resolution failed");
       }
@@ -92,7 +93,7 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
               email: contact.email ?? undefined,
               company: contact.company ?? undefined,
               phone: contact.phone ?? undefined,
-              crmUrl: buildCrmUrl(contact),
+              crmUrl: crmService.buildCrmLink(contact),
               avatarUrl: contact.avatarUrl ?? undefined,
             }
           : null,

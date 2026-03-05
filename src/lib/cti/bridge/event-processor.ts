@@ -11,6 +11,7 @@ import { getCorrelationId, isDuplicateEvent, clearCorrelation } from "../correla
 import { updateCallState, getCall } from "../state/call-state-store";
 import { broadcastCallEvent, broadcastScreenPop } from "./websocket-manager";
 import { setCallContext, enrichCallContext, removeCallContext, markCallConnected, buildCallSummary, getCallContext } from "../session/call-context";
+import { crmService } from "../../crm/service";
 import { metrics } from "../../observability/metrics";
 import { logger } from "../../observability/logger";
 
@@ -37,31 +38,6 @@ export interface RawTelephonyEvent {
   durationSecs?: number;
   /** Recording URL */
   recordingUrl?: string;
-}
-
-export interface CrmLookupFn {
-  (phoneNumber: string, tenantId: string): Promise<CrmContext | undefined>;
-}
-
-export interface CallLogFn {
-  (event: CtiCallEvent): Promise<void>;
-}
-
-let crmLookup: CrmLookupFn | undefined;
-let callLogger: CallLogFn | undefined;
-
-/**
- * Register the CRM lookup function (called during init).
- */
-export function setCrmLookup(fn: CrmLookupFn): void {
-  crmLookup = fn;
-}
-
-/**
- * Register the call logging function (called during init).
- */
-export function setCallLogger(fn: CallLogFn): void {
-  callLogger = fn;
 }
 
 /**
@@ -98,13 +74,18 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
     recordingUrl: raw.recordingUrl,
   };
 
-  // 4. CRM enrichment on first ringing event
-  if (raw.state === "ringing" && crmLookup) {
+  // 4. CRM enrichment on first ringing event (via CrmService)
+  if (raw.state === "ringing") {
     try {
       const lookupNumber = raw.direction === "inbound" ? raw.fromNumber : raw.toNumber;
-      const ctx = await crmLookup(lookupNumber, raw.tenantId);
-      if (ctx) {
-        event.crmContext = ctx;
+      const match = await crmService.resolveCallerByPhone(raw.tenantId, lookupNumber);
+      if (match) {
+        event.crmContext = {
+          recordId: match.crmRecordId,
+          module: match.crmModule,
+          displayName: match.displayName,
+          company: match.company ?? undefined,
+        };
       }
     } catch (err) {
       log.warn({ err, correlationId }, "CRM lookup failed during event processing");
@@ -151,7 +132,6 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
             recordId: event.crmContext.recordId || "",
             module: event.crmContext.module || "",
             company: event.crmContext.company,
-            crm: "zoho",
           }
         : undefined,
     };
@@ -189,26 +169,41 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
     "CTI event processed"
   );
 
-  // 7. Trigger call logging on terminal states
-  if (
-    (raw.state === "ended" || raw.state === "missed" || raw.state === "failed") &&
-    callLogger
-  ) {
-    // Compute disposition
+  // 7. Trigger call logging on terminal states via CrmService
+  if (raw.state === "ended" || raw.state === "missed" || raw.state === "failed") {
     if (raw.state === "ended") event.disposition = "answered";
     else if (raw.state === "missed") event.disposition = "missed";
     else event.disposition = "failed";
 
     try {
-      await callLogger(event);
+      await crmService.writeCallLog({
+        tenantId: raw.tenantId,
+        correlationId,
+        callId: raw.callId,
+        direction: raw.direction,
+        fromNumber: raw.fromNumber,
+        toNumber: raw.toNumber,
+        startedAt: raw.timestamp,
+        durationSecs: event.durationSecs,
+        disposition: event.disposition,
+        notes: event.notes,
+        recordingUrl: event.recordingUrl,
+        agentId: raw.agentId,
+        contactMatch: event.crmContext ? {
+          id: event.crmContext.recordId ?? "",
+          displayName: event.crmContext.displayName ?? "Unknown",
+          company: event.crmContext.company ?? null,
+          crmModule: event.crmContext.module,
+          crmRecordId: event.crmContext.recordId,
+        } : undefined,
+      });
       metrics.increment("cti_calls_completed", { disposition: event.disposition || "unknown" });
-      log.info({ correlationId }, "Call logged to CRM");
+      log.info({ correlationId }, "Call logged to CRM via CrmService");
     } catch (err) {
       metrics.increment("cti_call_log_error");
       log.error({ err, correlationId }, "Failed to log call to CRM");
     }
 
-    // Clean up correlation after logging
     clearCorrelation(raw.callId);
   }
 
