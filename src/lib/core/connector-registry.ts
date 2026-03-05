@@ -5,6 +5,9 @@ import { logger } from "../observability/logger";
 /**
  * Connector Registry — manages the lifecycle of all connector plugins.
  *
+ * Uses globalThis to ensure a single instance across all Next.js module
+ * contexts (instrumentation, API routes, middleware, etc.).
+ *
  * Adding a new connector:
  * 1. Implement ConnectorInterface in src/lib/connectors/<name>/index.ts
  * 2. Call registry.register(connector) at app startup
@@ -19,10 +22,13 @@ class ConnectorRegistry {
     const { id, name, version } = connector.manifest;
 
     if (this.connectors.has(id)) {
-      throw new ConnectorError(
-        id,
-        `Connector '${id}' is already registered`
+      // In case of re-registration (e.g. dynamic reload), just update
+      this.connectors.set(id, connector);
+      logger.info(
+        { connectorId: id, name, version },
+        `Connector re-registered: ${name} v${version}`
       );
+      return;
     }
 
     this.connectors.set(id, connector);
@@ -79,5 +85,17 @@ class ConnectorRegistry {
   }
 }
 
-/** Singleton registry */
-export const connectorRegistry = new ConnectorRegistry();
+// Use globalThis to ensure a single registry instance across all
+// Next.js module contexts (instrumentation, API routes, etc.)
+const REGISTRY_KEY = Symbol.for("connectplus.connectorRegistry");
+
+function getGlobalRegistry(): ConnectorRegistry {
+  const g = globalThis as Record<symbol, ConnectorRegistry>;
+  if (!g[REGISTRY_KEY]) {
+    g[REGISTRY_KEY] = new ConnectorRegistry();
+  }
+  return g[REGISTRY_KEY];
+}
+
+/** Singleton registry (global across all module contexts) */
+export const connectorRegistry = getGlobalRegistry();
