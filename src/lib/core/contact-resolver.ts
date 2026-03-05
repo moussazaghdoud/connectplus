@@ -22,13 +22,23 @@ export class ContactResolver {
     // 2. If specific connector requested, search it
     if (query.connectorId) {
       let connector = connectorRegistry.tryGet(query.connectorId);
+      logger.info(
+        { connectorId: query.connectorId, inRegistry: !!connector, registryIds: connectorRegistry.listIds() },
+        "Contact search: connector lookup"
+      );
       if (!connector) {
         // Try loading dynamic connector from DB definition
         try {
           const { dynamicLoader } = await import("../connectors/factory/dynamic-loader");
-          await dynamicLoader.reload(query.connectorId);
+          const loaded = await dynamicLoader.reload(query.connectorId);
           connector = connectorRegistry.tryGet(query.connectorId);
-        } catch { /* skip */ }
+          logger.info(
+            { connectorId: query.connectorId, loaded, inRegistry: !!connector },
+            "Contact search: dynamic load attempt"
+          );
+        } catch (loadErr) {
+          logger.warn({ connectorId: query.connectorId, err: loadErr }, "Contact search: dynamic load failed");
+        }
       }
       if (connector) {
         try {
@@ -38,8 +48,21 @@ export class ContactResolver {
               tenantId_connectorId: { tenantId, connectorId: query.connectorId! },
             },
           });
+          logger.info(
+            { connectorId: query.connectorId, hasConfig: !!config, configId: config?.id },
+            "Contact search: connector config lookup"
+          );
           if (config) {
             const credentials = decryptJson<Record<string, string>>(config.credentials);
+            logger.info(
+              {
+                connectorId: query.connectorId,
+                hasAccessToken: !!credentials.accessToken,
+                hasRefreshToken: !!credentials.refreshToken,
+                tokenExpiresAt: credentials.tokenExpiresAt,
+              },
+              "Contact search: credentials decrypted"
+            );
             await connector.initialize({
               tenantId,
               connectorId: query.connectorId!,
@@ -47,12 +70,21 @@ export class ContactResolver {
               settings: config.settings as Record<string, unknown>,
               enabled: config.enabled,
             });
+          } else {
+            logger.warn(
+              { connectorId: query.connectorId, tenantId },
+              "Contact search: no connector config found — connector not configured for this tenant"
+            );
           }
 
           const externals = await connector.searchContacts({
             ...query,
             tenantId,
           });
+          logger.info(
+            { connectorId: query.connectorId, resultCount: externals.length },
+            "Contact search: external results"
+          );
           for (const ext of externals) {
             const mapped = connector.mapContact(ext);
             // Deduplicate against local results
@@ -66,6 +98,11 @@ export class ContactResolver {
             "Connector search failed, returning local results only"
           );
         }
+      } else {
+        logger.warn(
+          { connectorId: query.connectorId },
+          "Contact search: connector not found in registry even after dynamic load"
+        );
       }
     }
 

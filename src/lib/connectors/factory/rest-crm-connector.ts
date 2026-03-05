@@ -181,12 +181,21 @@ export class RestCrmConnector implements ConnectorInterface {
     }
 
     if (!resp.ok) {
-      logger.warn({ status: resp.status, connector: this.manifest.id }, "Contact search failed");
+      const errText = await resp.text().catch(() => "");
+      logger.warn(
+        { status: resp.status, connector: this.manifest.id, response: errText.slice(0, 500) },
+        "Contact search API call failed"
+      );
       return [];
     }
 
     const data = await resp.json();
     const results = getByPath(data, searchConf.response.resultsPath) as unknown[];
+
+    logger.info(
+      { connector: this.manifest.id, resultsPath: searchConf.response.resultsPath, isArray: Array.isArray(results), count: Array.isArray(results) ? results.length : 0 },
+      "Contact search API response parsed"
+    );
 
     if (!Array.isArray(results)) return [];
 
