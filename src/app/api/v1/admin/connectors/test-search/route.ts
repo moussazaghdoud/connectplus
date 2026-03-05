@@ -8,48 +8,38 @@ import { decryptJson } from "@/lib/utils/crypto";
 
 /**
  * POST /api/v1/admin/connectors/test-search
- * Direct search test — bypasses contact-resolver, calls connector directly.
- * Returns raw API response details for debugging.
+ * Direct raw search test — makes a raw HTTP call to the CRM and returns
+ * the exact status code, headers, and response body for debugging.
  */
 export const POST = apiHandler(async (request: NextRequest, ctx) => {
   const { connectorId, query, phone } = await request.json();
   const tenantId = ctx.tenant.tenantId;
 
-  // 1. Find connector (always reload from DB to get latest config)
-  let connector;
-  try {
-    const { dynamicLoader } = await import("@/lib/connectors/factory/dynamic-loader");
-    await dynamicLoader.reload(connectorId);
-    connector = connectorRegistry.tryGet(connectorId);
-  } catch (err) {
-    return NextResponse.json({
-      error: "Dynamic load failed",
-      details: (err as Error).message,
-    }, { status: 500 });
-  }
-  if (!connector) {
-    connector = connectorRegistry.tryGet(connectorId);
+  // 1. Get connector definition from DB
+  const definition = await prisma.connectorDefinition.findUnique({
+    where: { slug: connectorId },
+  });
+
+  if (!definition) {
+    return NextResponse.json({ error: `Definition '${connectorId}' not found` }, { status: 404 });
   }
 
-  if (!connector) {
-    return NextResponse.json({
-      error: `Connector '${connectorId}' not found`,
-      registeredConnectors: connectorRegistry.listIds(),
-    }, { status: 404 });
-  }
+  const defConfig = definition.config as Record<string, unknown>;
+  const authConfig = defConfig.auth as Record<string, unknown>;
+  const oauth2Config = authConfig.oauth2 as Record<string, unknown>;
+  const searchConfig = defConfig.contactSearch as Record<string, unknown>;
+  const requestConfig = searchConfig.request as Record<string, unknown>;
+  const queryParams = (requestConfig?.queryParams ?? {}) as Record<string, string>;
 
-  // 2. Get config
+  // 2. Get credentials
   const config = await prisma.connectorConfig.findUnique({
     where: { tenantId_connectorId: { tenantId, connectorId } },
   });
 
   if (!config) {
-    return NextResponse.json({
-      error: `No config for connector '${connectorId}' in tenant`,
-    }, { status: 404 });
+    return NextResponse.json({ error: `No config for '${connectorId}'` }, { status: 404 });
   }
 
-  // 3. Decrypt and show token status
   const credentials = decryptJson<Record<string, string>>(config.credentials);
   const tokenInfo = {
     hasAccessToken: !!credentials.accessToken,
@@ -58,44 +48,62 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
     isExpired: credentials.tokenExpiresAt
       ? new Date(credentials.tokenExpiresAt) < new Date()
       : "unknown",
-    accessTokenPreview: credentials.accessToken
-      ? `${credentials.accessToken.slice(0, 20)}...`
-      : "none",
   };
 
-  // 4. Initialize and search
-  try {
-    await connector.initialize({
-      tenantId,
-      connectorId,
-      credentials,
-      settings: config.settings as Record<string, unknown>,
-      enabled: config.enabled,
-    });
+  // 3. Build the raw API request
+  const apiBaseUrl = defConfig.apiBaseUrl as string;
+  const endpoint = searchConfig.endpoint as string;
+  const method = searchConfig.method as string;
+  const tokenPrefix = (oauth2Config?.tokenPrefix ?? "Bearer") as string;
+  const queryStr = query ?? phone ?? "";
 
-    const results = await connector.searchContacts({
-      tenantId,
-      query: query ?? undefined,
-      phone: phone ?? undefined,
-      limit: 5,
-    });
+  let fullUrl: string;
+  const headers: Record<string, string> = {
+    Authorization: `${tokenPrefix} ${credentials.accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  if (method === "GET") {
+    const params = new URLSearchParams();
+    for (const [key, tmpl] of Object.entries(queryParams)) {
+      params.set(key, tmpl.replace("{{query}}", queryStr).replace("{{phone}}", phone ?? "").replace("{{email}}", ""));
+    }
+    fullUrl = `${apiBaseUrl}${endpoint}?${params.toString()}`;
+  } else {
+    fullUrl = `${apiBaseUrl}${endpoint}`;
+  }
+
+  // 4. Make raw HTTP call
+  try {
+    const resp = await fetch(fullUrl, { method, headers });
+    const status = resp.status;
+    const responseHeaders: Record<string, string> = {};
+    resp.headers.forEach((v, k) => { responseHeaders[k] = v; });
+
+    const bodyText = await resp.text().catch(() => "");
+    let bodyJson: unknown = null;
+    try { bodyJson = JSON.parse(bodyText); } catch { /* not json */ }
 
     return NextResponse.json({
       tokenInfo,
-      searchQuery: { query, phone },
-      resultCount: results.length,
-      results: results.map((r) => ({
-        externalId: r.externalId,
-        source: r.source,
-        rawPreview: JSON.stringify(r.raw).slice(0, 500),
-      })),
+      request: {
+        method,
+        url: fullUrl,
+        authHeader: `${tokenPrefix} ${credentials.accessToken?.slice(0, 20)}...`,
+      },
+      response: {
+        status,
+        statusText: resp.statusText,
+        headers: responseHeaders,
+        bodyPreview: bodyText.slice(0, 2000),
+        bodyJson,
+      },
     });
   } catch (err) {
     return NextResponse.json({
       tokenInfo,
-      searchQuery: { query, phone },
+      request: { method, url: fullUrl },
       error: (err as Error).message,
-      stack: (err as Error).stack?.split("\n").slice(0, 5),
     }, { status: 500 });
   }
 });
