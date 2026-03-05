@@ -6,9 +6,11 @@ import { ActiveCallPanel } from "./ActiveCallPanel";
 import { RecentCalls } from "./RecentCalls";
 import type { ScreenPopData } from "./ScreenPopup";
 import { CallWrapUp } from "./CallWrapUp";
+import { useRainbowWebSDK } from "@/hooks/useRainbowWebSDK";
 import type { CtiCallEvent } from "@/lib/cti/types/call-event";
 
 type Tab = "phone" | "active" | "recent";
+type RainbowStatus = "disconnected" | "connecting" | "connected" | "error";
 
 interface Props {
   agentId: string;
@@ -51,10 +53,98 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const activeCallRef = useRef<ActiveCall | null>(null);
 
+  // Rainbow connection state
+  const [rbLogin, setRbLogin] = useState("");
+  const [rbPassword, setRbPassword] = useState("");
+  const [rbStatus, setRbStatus] = useState<RainbowStatus>("disconnected");
+  const [rbError, setRbError] = useState("");
+  const [showRbPopup, setShowRbPopup] = useState(false);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const webrtc = useRainbowWebSDK(null);
+
   // Keep ref in sync with state
   useEffect(() => {
     activeCallRef.current = activeCall;
   }, [activeCall]);
+
+  // Load saved Rainbow login from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("connectplus_rb_login");
+    if (saved) setRbLogin(saved);
+  }, []);
+
+  // Close popup on outside click
+  useEffect(() => {
+    if (!showRbPopup) return;
+    const handler = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setShowRbPopup(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showRbPopup]);
+
+  // Check Rainbow status on mount
+  useEffect(() => {
+    fetch("/api/v1/rainbow/connect", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.session?.status === "connected") {
+          setRbStatus("connected");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sync WebRTC errors
+  useEffect(() => {
+    if (webrtc.error) {
+      setRbError(webrtc.error);
+      if (webrtc.status === "error") setRbStatus("error");
+    }
+  }, [webrtc.error, webrtc.status]);
+
+  const connectRainbow = useCallback(async () => {
+    setRbStatus("connecting");
+    setRbError("");
+    localStorage.setItem("connectplus_rb_login", rbLogin);
+    try {
+      const resp = await fetch("/api/v1/rainbow/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ login: rbLogin, password: rbPassword, mode: "webrtc" }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setRbStatus("error");
+        setRbError(data.error?.message || `HTTP ${resp.status}`);
+        return;
+      }
+      if (!data.webrtc) {
+        setRbStatus("error");
+        setRbError("Server did not return WebRTC credentials");
+        return;
+      }
+      await webrtc.initialize(data.webrtc.appId, data.webrtc.appSecret, data.webrtc.host);
+      await webrtc.login(rbLogin, rbPassword);
+      setRbStatus("connected");
+      setShowRbPopup(false);
+    } catch (err) {
+      setRbStatus("error");
+      setRbError(err instanceof Error ? err.message : "Connection failed");
+    }
+  }, [rbLogin, rbPassword, webrtc]);
+
+  const disconnectRainbow = useCallback(async () => {
+    await webrtc.logout();
+    try {
+      await fetch("/api/v1/rainbow/connect", { method: "DELETE", credentials: "include" });
+    } catch {}
+    setRbStatus("disconnected");
+    setRbError("");
+  }, [webrtc]);
 
   const handleCallEvent = useCallback((event: CtiCallEvent) => {
     if (event.state === "ringing" || event.state === "connected" || event.state === "held") {
@@ -175,18 +265,26 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   const handleAnswer = useCallback(() => {
     if (activeCall) {
-      // Tell /widget to answer via Rainbow SDK
-      channelRef.current?.postMessage({ action: "answer", callId: activeCall.callId });
+      // Use local WebRTC SDK if connected, otherwise relay to /widget via BroadcastChannel
+      if (rbStatus === "connected") {
+        webrtc.answer();
+      } else {
+        channelRef.current?.postMessage({ action: "answer", callId: activeCall.callId });
+      }
       callAction("answer", { callId: activeCall.callId });
     }
-  }, [activeCall, callAction]);
+  }, [activeCall, callAction, rbStatus, webrtc]);
 
   const handleHangup = useCallback(() => {
     if (activeCall) {
-      channelRef.current?.postMessage({ action: "hangup", callId: activeCall.callId });
+      if (rbStatus === "connected") {
+        webrtc.hangup();
+      } else {
+        channelRef.current?.postMessage({ action: "hangup", callId: activeCall.callId });
+      }
       callAction("hangup", { callId: activeCall.callId });
     }
-  }, [activeCall, callAction]);
+  }, [activeCall, callAction, rbStatus, webrtc]);
 
   const handleHold = useCallback(() => {
     if (activeCall)
@@ -246,10 +344,15 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     [wrapUp]
   );
 
+  const rbDotColor = {
+    disconnected: "bg-gray-400",
+    connecting: "bg-yellow-400 animate-pulse",
+    connected: "bg-green-400",
+    error: "bg-red-400",
+  }[rbStatus];
+
   return (
     <div className="flex flex-col h-screen w-full max-w-sm mx-auto bg-white relative">
-      {/* Screen Pop Overlay */}
-
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
         <div className="flex items-center gap-2">
@@ -258,13 +361,75 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
           </div>
           <span className="text-sm font-semibold">Rainbow CTI</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-2 h-2 rounded-full ${connected ? "bg-green-400" : "bg-red-400"}`}
-          />
-          <span className="text-xs opacity-80">{agentEmail}</span>
+        <div className="relative">
+          <button
+            onClick={() => setShowRbPopup(!showRbPopup)}
+            className="flex items-center gap-2 hover:opacity-90 transition-opacity"
+          >
+            <div className={`w-2.5 h-2.5 rounded-full ${rbDotColor}`} />
+            <span className="text-xs opacity-90">{agentEmail}</span>
+          </button>
+
+          {/* Rainbow login popup */}
+          {showRbPopup && (
+            <div
+              ref={popupRef}
+              className="absolute right-0 top-full mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
+            >
+              {rbStatus === "connected" ? (
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                    <span className="text-sm text-gray-700 font-medium">Connected</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3 truncate">{rbLogin}</p>
+                  <button
+                    onClick={() => { disconnectRainbow(); setShowRbPopup(false); }}
+                    className="w-full py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors border border-red-200"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); connectRainbow(); }}
+                  className="p-4 space-y-3"
+                >
+                  <p className="text-sm font-medium text-gray-700">Rainbow Login</p>
+                  <input
+                    type="email"
+                    value={rbLogin}
+                    onChange={(e) => setRbLogin(e.target.value)}
+                    placeholder="Rainbow email"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <input
+                    type="password"
+                    value={rbPassword}
+                    onChange={(e) => setRbPassword(e.target.value)}
+                    placeholder="Password"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  {rbError && (
+                    <p className="text-xs text-red-500">{rbError}</p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={rbStatus === "connecting" || !rbLogin.trim() || !rbPassword.trim()}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-md transition-colors"
+                  >
+                    {rbStatus === "connecting" ? "Connecting..." : "Connect"}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Hidden audio element for WebRTC */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio ref={webrtc.audioRef} autoPlay style={{ display: "none" }} />
 
       {/* Error banner */}
       {error && (
