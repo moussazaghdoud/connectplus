@@ -26,6 +26,26 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // CTI widget routes: allow embedding in CRM iframe
+        source: "/cti-widget/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors *",
+          },
+        ],
+      },
+      {
+        // CTI widget root
+        source: "/cti-widget",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors *",
+          },
+        ],
+      },
+      {
         // Login page: allow embedding in iframe (agent logs in from Zoho/CRM)
         source: "/login",
         headers: [
@@ -47,7 +67,7 @@ const nextConfig: NextConfig = {
       },
       {
         // All other routes: prevent iframe embedding
-        source: "/((?!widget|login|api).*)",
+        source: "/((?!widget|cti-widget|login|api).*)",
         headers: [
           {
             key: "X-Frame-Options",

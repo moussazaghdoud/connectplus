@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "postinstall": "node -e \"try{require('./scripts/copy-rainbow-web-sdk.js')}catch(e){}\""
+    "postinstall": "node -e \"try{require('./scripts/copy-rainbow-web-sdk.js')}catch(e){}\"",
+    "seed:marketplace": "npx tsx prisma/seed-marketplace.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",

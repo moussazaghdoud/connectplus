@@ -1,0 +1,155 @@
+/**
+ * CTI Event Processor — the core of the bridge.
+ *
+ * Receives raw telephony events (from Rainbow webhooks or WebRTC),
+ * correlates them, de-duplicates, enriches with CRM context,
+ * broadcasts to widgets, and triggers call logging.
+ */
+
+import type { CtiCallEvent, CallState, CallDirection, CrmContext } from "../types/call-event";
+import { getCorrelationId, isDuplicateEvent, clearCorrelation } from "../correlation/correlator";
+import { updateCallState, getCall } from "../state/call-state-store";
+import { broadcastCallEvent } from "./websocket-manager";
+import { metrics } from "../../observability/metrics";
+import { logger } from "../../observability/logger";
+
+const log = logger.child({ module: "cti-event-processor" });
+
+export interface RawTelephonyEvent {
+  /** Provider call ID (Rainbow) */
+  callId: string;
+  /** Call direction */
+  direction: CallDirection;
+  /** Caller number */
+  fromNumber: string;
+  /** Destination number */
+  toNumber: string;
+  /** Event timestamp */
+  timestamp: string;
+  /** Call state */
+  state: CallState;
+  /** Agent identifier */
+  agentId: string;
+  /** Tenant ID */
+  tenantId: string;
+  /** Duration (for ended calls) */
+  durationSecs?: number;
+  /** Recording URL */
+  recordingUrl?: string;
+}
+
+export interface CrmLookupFn {
+  (phoneNumber: string, tenantId: string): Promise<CrmContext | undefined>;
+}
+
+export interface CallLogFn {
+  (event: CtiCallEvent): Promise<void>;
+}
+
+let crmLookup: CrmLookupFn | undefined;
+let callLogger: CallLogFn | undefined;
+
+/**
+ * Register the CRM lookup function (called during init).
+ */
+export function setCrmLookup(fn: CrmLookupFn): void {
+  crmLookup = fn;
+}
+
+/**
+ * Register the call logging function (called during init).
+ */
+export function setCallLogger(fn: CallLogFn): void {
+  callLogger = fn;
+}
+
+/**
+ * Process a raw telephony event through the full pipeline:
+ * 1. Correlate (assign/reuse correlationId)
+ * 2. De-duplicate
+ * 3. Enrich with CRM context (on ringing)
+ * 4. Update call state store
+ * 5. Broadcast to widget subscribers
+ * 6. Trigger call logging (on ended/missed)
+ */
+export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent | null> {
+  // 1. Correlate
+  const correlationId = getCorrelationId(raw.callId, raw.tenantId, raw.agentId);
+
+  // 2. De-duplicate
+  if (isDuplicateEvent(correlationId, raw.state, raw.timestamp)) {
+    metrics.increment("cti_events_deduplicated_processor");
+    return null;
+  }
+
+  // 3. Build canonical event
+  const event: CtiCallEvent = {
+    callId: raw.callId,
+    correlationId,
+    direction: raw.direction,
+    fromNumber: raw.fromNumber,
+    toNumber: raw.toNumber,
+    timestamp: raw.timestamp,
+    state: raw.state,
+    agentId: raw.agentId,
+    tenantId: raw.tenantId,
+    durationSecs: raw.durationSecs,
+    recordingUrl: raw.recordingUrl,
+  };
+
+  // 4. CRM enrichment on first ringing event
+  if (raw.state === "ringing" && crmLookup) {
+    try {
+      const lookupNumber = raw.direction === "inbound" ? raw.fromNumber : raw.toNumber;
+      const ctx = await crmLookup(lookupNumber, raw.tenantId);
+      if (ctx) {
+        event.crmContext = ctx;
+      }
+    } catch (err) {
+      log.warn({ err, correlationId }, "CRM lookup failed during event processing");
+    }
+  } else {
+    // Carry forward CRM context from existing call state
+    const existing = getCall(raw.tenantId, raw.callId);
+    if (existing?.crmContext) {
+      event.crmContext = existing.crmContext;
+    }
+  }
+
+  // 5. Update call state store
+  updateCallState(event);
+
+  // 6. Broadcast to widget
+  const sent = broadcastCallEvent(event);
+  metrics.increment("cti_events_broadcast", { state: raw.state });
+  if (sent > 0) metrics.increment("cti_subscribers_notified", { count: String(sent) });
+  log.info(
+    { correlationId, state: raw.state, callId: raw.callId, subscribers: sent },
+    "CTI event processed"
+  );
+
+  // 7. Trigger call logging on terminal states
+  if (
+    (raw.state === "ended" || raw.state === "missed" || raw.state === "failed") &&
+    callLogger
+  ) {
+    // Compute disposition
+    if (raw.state === "ended") event.disposition = "answered";
+    else if (raw.state === "missed") event.disposition = "missed";
+    else event.disposition = "failed";
+
+    try {
+      await callLogger(event);
+      metrics.increment("cti_calls_completed", { disposition: event.disposition || "unknown" });
+      log.info({ correlationId }, "Call logged to CRM");
+    } catch (err) {
+      metrics.increment("cti_call_log_error");
+      log.error({ err, correlationId }, "Failed to log call to CRM");
+    }
+
+    // Clean up correlation after logging
+    clearCorrelation(raw.callId);
+  }
+
+  return event;
+}

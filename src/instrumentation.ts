@@ -25,4 +25,47 @@ export async function register() {
   } catch (err) {
     console.error("[ConnectPlus] SSE/Inbound handler initialization failed:", err);
   }
+
+  // Initialize CTI Event Bridge — wire Zoho CRM lookup and call logging
+  try {
+    const { setCrmLookup, setCallLogger } = await import("@/lib/cti");
+    const { lookupCallerInZoho } = await import("@/lib/connectors/zoho-cti/crm-lookup");
+    const { logCallToZoho } = await import("@/lib/connectors/zoho-cti/call-logger");
+    const { prisma } = await import("@/lib/db");
+    const { decrypt } = await import("@/lib/utils/crypto");
+
+    setCrmLookup(async (phoneNumber, tenantId) => {
+      const config = await prisma.connectorConfig.findFirst({
+        where: { tenantId, connectorId: "zoho-crm", enabled: true },
+      });
+      if (!config?.credentials) return undefined;
+
+      const creds = JSON.parse(decrypt(config.credentials as string));
+      if (!creds.accessToken) return undefined;
+
+      return lookupCallerInZoho(phoneNumber, {
+        accessToken: creds.accessToken,
+        dc: creds.zohoDc || "eu",
+      });
+    });
+
+    setCallLogger(async (event) => {
+      const config = await prisma.connectorConfig.findFirst({
+        where: { tenantId: event.tenantId, connectorId: "zoho-crm", enabled: true },
+      });
+      if (!config?.credentials) return;
+
+      const creds = JSON.parse(decrypt(config.credentials as string));
+      if (!creds.accessToken) return;
+
+      await logCallToZoho(event, {
+        accessToken: creds.accessToken,
+        dc: creds.zohoDc || "eu",
+      });
+    });
+
+    console.log("[ConnectPlus] CTI Event Bridge initialized");
+  } catch (err) {
+    console.error("[ConnectPlus] CTI Bridge initialization failed:", err);
+  }
 }

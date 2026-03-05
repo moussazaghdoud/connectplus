@@ -277,8 +277,25 @@ model ConnectorDefinition {
   version Int                           @default(1)
   status  ConnectorDefinitionStatus     @default(DRAFT)
 
-  // Last test results
-  lastTestResult Json?
+  // Marketplace metadata
+  category      ConnectorCategory       @default(CRM)
+  tier          ConnectorTier           @default(CONFIG_DRIVEN)
+  authType      String                  @default("oauth2")
+  vendorUrl     String?
+  docsUrl       String?
+  iconName      String?
+  pricingTier   String?
+  shortDesc     String                  @default("")
+  prerequisites Json                    @default("[]")
+  setupSteps    Json                    @default("[]")
+
+  // Operational tracking
+  lastTestResult     Json?
+  lastHealthAt       DateTime?
+  lastHealthStatus   Boolean?
+  lastHealthLatency  Int?
+  lastTokenRefreshAt DateTime?
+  lastWebhookAt      DateTime?
 
   versions ConnectorDefinitionVersion[]
 
@@ -287,6 +304,7 @@ model ConnectorDefinition {
 
   @@index([tenantId])
   @@index([status])
+  @@index([category])
 }
 
 model ConnectorDefinitionVersion {
@@ -309,6 +327,18 @@ enum ConnectorDefinitionStatus {
   ACTIVE
   DISABLED
   ARCHIVED
+}
+
+enum ConnectorCategory {
+  CRM
+  HELPDESK
+  COLLABORATION
+  OTHER
+}
+
+enum ConnectorTier {
+  CODE_BASED
+  CONFIG_DRIVEN
 }
 
 // ─── IDEMPOTENCY STORE ───────────────────────────────────

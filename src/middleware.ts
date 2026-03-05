@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "cp_session";
 
 /** Routes that require a session cookie (redirects to /login if missing) */
-const PROTECTED_PATHS = ["/widget", "/agent"];
+const PROTECTED_PATHS = ["/widget", "/agent", "/cti-widget"];
 
 /**
  * Next.js middleware:
@@ -52,6 +52,8 @@ export const config = {
     "/widget",
     "/agent/:path*",
     "/agent",
+    "/cti-widget/:path*",
+    "/cti-widget",
     "/login",
     "/api/v1/rainbow/webhooks/:path+",
   ],
