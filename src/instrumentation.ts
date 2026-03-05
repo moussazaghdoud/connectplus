@@ -11,7 +11,7 @@ export async function register() {
 
   try {
     const { initializeConnectors } = await import("@/lib/connectors");
-    initializeConnectors();
+    await initializeConnectors();
   } catch (err) {
     console.error("[ConnectPlus] Connector initialization failed:", err);
   }
