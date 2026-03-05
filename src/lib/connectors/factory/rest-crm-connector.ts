@@ -15,11 +15,13 @@ import type {
 import type { CanonicalContact, ContactSearchQuery, ExternalContact } from "../../core/models/contact";
 import type { Interaction } from "../../../prisma-types";
 import type { ConnectorDefinitionConfig } from "./types";
-import { buildAuthHeaders, buildOAuth2AuthUrl, exchangeOAuth2Token } from "./auth-handler";
+import { buildAuthHeaders, buildOAuth2AuthUrl, exchangeOAuth2Token, refreshOAuth2Token } from "./auth-handler";
 import { verifyWebhookSignature } from "./webhook-verifier";
 import { getByPath, resolveField, applyTemplate, mapContactFields } from "./field-mapper";
 import { validateUrl, resolveEndpoint } from "./url-validator";
 import { fetchWithRetry } from "../../utils/http";
+import { encryptJson } from "../../utils/crypto";
+import { prisma } from "../../db";
 import { logger } from "../../observability/logger";
 
 export class RestCrmConnector implements ConnectorInterface {
@@ -78,9 +80,69 @@ export class RestCrmConnector implements ConnectorInterface {
     );
   }
 
+  // ── Token Refresh ──────────────────────────────────────
+
+  /**
+   * Check if OAuth token is expired and refresh it automatically.
+   * Updates stored credentials in DB with new access token.
+   */
+  private async ensureFreshToken(): Promise<void> {
+    if (this.def.auth.type !== "oauth2" || !this.config) return;
+
+    const creds = this.config.credentials;
+    const expiresAt = creds.tokenExpiresAt ? new Date(creds.tokenExpiresAt) : null;
+    const isExpired = !creds.accessToken || (expiresAt && expiresAt < new Date());
+
+    if (!isExpired) return;
+
+    const refreshToken = creds.refreshToken;
+    if (!refreshToken) {
+      logger.warn({ connector: this.manifest.id }, "OAuth token expired but no refresh token available");
+      return;
+    }
+
+    try {
+      logger.info({ connector: this.manifest.id }, "Refreshing expired OAuth token");
+      const tokens = await refreshOAuth2Token(
+        this.def.auth,
+        creds.clientId ?? "",
+        creds.clientSecret ?? "",
+        refreshToken
+      );
+
+      // Update in-memory credentials
+      this.config.credentials = {
+        ...creds,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken || refreshToken,
+        tokenExpiresAt: tokens.expiresAt.toISOString(),
+      };
+
+      // Persist to DB
+      try {
+        await prisma.connectorConfig.updateMany({
+          where: {
+            tenantId: this.config.tenantId,
+            connectorId: this.config.connectorId,
+          },
+          data: {
+            credentials: encryptJson(this.config.credentials),
+          },
+        });
+        logger.info({ connector: this.manifest.id }, "OAuth token refreshed and saved");
+      } catch (err) {
+        logger.warn({ err, connector: this.manifest.id }, "Token refreshed but DB save failed");
+      }
+    } catch (err) {
+      logger.error({ err, connector: this.manifest.id }, "OAuth token refresh failed");
+    }
+  }
+
   // ── Contact Search ─────────────────────────────────────
 
   async searchContacts(query: ContactSearchQuery): Promise<ExternalContact[]> {
+    await this.ensureFreshToken();
+
     const creds = this.config?.credentials ?? {};
     const headers = {
       ...buildAuthHeaders(this.def.auth, creds),
@@ -189,8 +251,12 @@ export class RestCrmConnector implements ConnectorInterface {
   async writeBack(interaction: Interaction, config: TenantConnectorConfig): Promise<void> {
     if (!this.def.writeBack) return;
 
+    // Ensure token is fresh before write-back
+    this.config = config;
+    await this.ensureFreshToken();
+
     const headers = {
-      ...buildAuthHeaders(this.def.auth, config.credentials),
+      ...buildAuthHeaders(this.def.auth, this.config?.credentials ?? config.credentials),
       "Content-Type": "application/json",
     };
 
