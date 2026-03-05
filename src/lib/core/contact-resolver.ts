@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 import { connectorRegistry } from "./connector-registry";
 import { getTenantContext } from "./tenant-context";
+import { decryptJson } from "../utils/crypto";
 import type { CanonicalContact, ContactSearchQuery } from "./models/contact";
 import { logger } from "../observability/logger";
 
@@ -31,6 +32,23 @@ export class ContactResolver {
       }
       if (connector) {
         try {
+          // Initialize connector with tenant credentials
+          const config = await prisma.connectorConfig.findUnique({
+            where: {
+              tenantId_connectorId: { tenantId, connectorId: query.connectorId! },
+            },
+          });
+          if (config) {
+            const credentials = decryptJson<Record<string, string>>(config.credentials);
+            await connector.initialize({
+              tenantId,
+              connectorId: query.connectorId!,
+              credentials,
+              settings: config.settings as Record<string, unknown>,
+              enabled: config.enabled,
+            });
+          }
+
           const externals = await connector.searchContacts({
             ...query,
             tenantId,
