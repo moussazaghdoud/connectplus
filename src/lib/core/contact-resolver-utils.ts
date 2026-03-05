@@ -87,7 +87,7 @@ async function resolveFromConnectors(tenantId: string, phone: string) {
 
     let connector = connectorRegistry.tryGet(config.connectorId);
     logger.info(
-      { connectorId: config.connectorId, foundInRegistry: !!connector, registrySize: connectorRegistry.list().length },
+      { connectorId: config.connectorId, foundInRegistry: !!connector, registrySize: connectorRegistry.size },
       "[ContactResolver] Registry lookup"
     );
 
