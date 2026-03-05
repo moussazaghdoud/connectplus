@@ -15,19 +15,20 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
   const { connectorId, query, phone } = await request.json();
   const tenantId = ctx.tenant.tenantId;
 
-  // 1. Find connector
-  let connector = connectorRegistry.tryGet(connectorId);
+  // 1. Find connector (always reload from DB to get latest config)
+  let connector;
+  try {
+    const { dynamicLoader } = await import("@/lib/connectors/factory/dynamic-loader");
+    await dynamicLoader.reload(connectorId);
+    connector = connectorRegistry.tryGet(connectorId);
+  } catch (err) {
+    return NextResponse.json({
+      error: "Dynamic load failed",
+      details: (err as Error).message,
+    }, { status: 500 });
+  }
   if (!connector) {
-    try {
-      const { dynamicLoader } = await import("@/lib/connectors/factory/dynamic-loader");
-      await dynamicLoader.reload(connectorId);
-      connector = connectorRegistry.tryGet(connectorId);
-    } catch (err) {
-      return NextResponse.json({
-        error: "Dynamic load failed",
-        details: (err as Error).message,
-      }, { status: 500 });
-    }
+    connector = connectorRegistry.tryGet(connectorId);
   }
 
   if (!connector) {
