@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["rainbow-node-sdk"],
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "cdn.worldvectorlogo.com" },
+      { protocol: "https", hostname: "logo.clearbit.com" },
     ],
   },
   async headers() {

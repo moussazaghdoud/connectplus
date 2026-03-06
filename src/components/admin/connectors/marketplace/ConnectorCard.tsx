@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { StatusBadge } from "./StatusBadge";
 import { HealthDot } from "./HealthDot";
 
@@ -27,36 +26,39 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 /**
- * Connector logo URLs — using official brand icons from public CDNs.
- * Keys match the connector slug from ConnectorDefinition.
+ * Connector logo URLs — using Clearbit Logo API (reliable, free).
+ * Format: https://logo.clearbit.com/{domain}?size=80
  */
 const CONNECTOR_LOGOS: Record<string, string> = {
-  hubspot: "https://cdn.worldvectorlogo.com/logos/hubspot-1.svg",
-  "zoho-crm": "https://cdn.worldvectorlogo.com/logos/zoho-1.svg",
-  salesforce: "https://cdn.worldvectorlogo.com/logos/salesforce-2.svg",
-  "dynamics-365": "https://cdn.worldvectorlogo.com/logos/microsoft-dynamics-365.svg",
-  zendesk: "https://cdn.worldvectorlogo.com/logos/zendesk-1.svg",
-  freshdesk: "https://cdn.worldvectorlogo.com/logos/freshdesk.svg",
-  servicenow: "https://cdn.worldvectorlogo.com/logos/servicenow-2.svg",
-  pipedrive: "https://cdn.worldvectorlogo.com/logos/pipedrive.svg",
-  intercom: "https://cdn.worldvectorlogo.com/logos/intercom-2.svg",
-  "monday-crm": "https://cdn.worldvectorlogo.com/logos/monday-1.svg",
-  copper: "https://cdn.worldvectorlogo.com/logos/copper-2.svg",
-  freshsales: "https://cdn.worldvectorlogo.com/logos/freshworks-2.svg",
-  close: "https://cdn.worldvectorlogo.com/logos/close-io.svg",
-  sugarcrm: "https://cdn.worldvectorlogo.com/logos/sugarcrm.svg",
-  insightly: "https://cdn.worldvectorlogo.com/logos/insightly.svg",
-  capsule: "https://cdn.worldvectorlogo.com/logos/capsule-crm.svg",
-  keap: "https://cdn.worldvectorlogo.com/logos/keap-1.svg",
-  bitrix24: "https://cdn.worldvectorlogo.com/logos/bitrix24-1.svg",
-  "zoho-desk": "https://cdn.worldvectorlogo.com/logos/zoho-1.svg",
-  "jira-sm": "https://cdn.worldvectorlogo.com/logos/jira-3.svg",
-  helpscout: "https://cdn.worldvectorlogo.com/logos/help-scout.svg",
-  front: "https://cdn.worldvectorlogo.com/logos/front-1.svg",
-  "sap-sales": "https://cdn.worldvectorlogo.com/logos/sap-2.svg",
-  "oracle-cx": "https://cdn.worldvectorlogo.com/logos/oracle-6.svg",
-  odoo: "https://cdn.worldvectorlogo.com/logos/odoo.svg",
-  creatio: "https://cdn.worldvectorlogo.com/logos/creatio-1.svg",
+  hubspot: "https://logo.clearbit.com/hubspot.com?size=80",
+  "zoho-crm": "https://logo.clearbit.com/zoho.com?size=80",
+  salesforce: "https://logo.clearbit.com/salesforce.com?size=80",
+  "dynamics-365": "https://logo.clearbit.com/microsoft.com?size=80",
+  zendesk: "https://logo.clearbit.com/zendesk.com?size=80",
+  freshdesk: "https://logo.clearbit.com/freshdesk.com?size=80",
+  servicenow: "https://logo.clearbit.com/servicenow.com?size=80",
+  pipedrive: "https://logo.clearbit.com/pipedrive.com?size=80",
+  intercom: "https://logo.clearbit.com/intercom.com?size=80",
+  "monday-crm": "https://logo.clearbit.com/monday.com?size=80",
+  copper: "https://logo.clearbit.com/copper.com?size=80",
+  freshsales: "https://logo.clearbit.com/freshworks.com?size=80",
+  close: "https://logo.clearbit.com/close.com?size=80",
+  sugarcrm: "https://logo.clearbit.com/sugarcrm.com?size=80",
+  insightly: "https://logo.clearbit.com/insightly.com?size=80",
+  nutshell: "https://logo.clearbit.com/nutshell.com?size=80",
+  capsule: "https://logo.clearbit.com/capsulecrm.com?size=80",
+  keap: "https://logo.clearbit.com/keap.com?size=80",
+  bitrix24: "https://logo.clearbit.com/bitrix24.com?size=80",
+  "zoho-desk": "https://logo.clearbit.com/zoho.com?size=80",
+  "jira-sm": "https://logo.clearbit.com/atlassian.com?size=80",
+  helpscout: "https://logo.clearbit.com/helpscout.com?size=80",
+  front: "https://logo.clearbit.com/front.com?size=80",
+  happyfox: "https://logo.clearbit.com/happyfox.com?size=80",
+  kayako: "https://logo.clearbit.com/kayako.com?size=80",
+  "sap-sales": "https://logo.clearbit.com/sap.com?size=80",
+  "oracle-cx": "https://logo.clearbit.com/oracle.com?size=80",
+  odoo: "https://logo.clearbit.com/odoo.com?size=80",
+  creatio: "https://logo.clearbit.com/creatio.com?size=80",
 };
 
 /** Fallback letter + gradient when no logo is found */
@@ -99,16 +101,16 @@ function ConnectorLogo({ slug, name }: { slug: string; name: string }) {
 
   if (logoUrl) {
     return (
-      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white border border-gray-100 flex items-center justify-center p-1.5">
-        <Image
+      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white border border-gray-100 flex items-center justify-center p-1.5 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={logoUrl}
           alt={`${name} logo`}
           width={28}
           height={28}
-          className="object-contain"
-          unoptimized
+          className="object-contain w-7 h-7"
+          loading="lazy"
           onError={(e) => {
-            // On load error, replace with fallback letter
             const target = e.currentTarget;
             target.style.display = "none";
             const parent = target.parentElement;
