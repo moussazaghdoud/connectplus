@@ -43,7 +43,8 @@ Browser (Widget / Agent UI / CTI Widget)
       ├─ REST /api/v1/rainbow/connect?mode=webrtc → returns appId/secret/host
       ├─ Rainbow Web SDK loaded from CDN (dynamic import at runtime)
       ├─ SDK login → XMPP connection → telephonyService detects calls
-      ├─ Call control: answer, reject, mute, hold, hangup in browser
+      ├─ Call control: answer, reject, mute, hold, hangup, makeCall in browser
+      ├─ Click-to-call: makePhoneCall(number) from DialPad, Contacts, or RecentCalls
       ├─ Reports call events → POST /api/v1/calls/event → interaction tracking
       └─ Audio via WebRTC peer connection through browser <audio> element
 
@@ -165,6 +166,13 @@ src/
 ├── components/
 │   ├── screen-pop/                               # Legacy agent UI components
 │   ├── cti-widget/                               # CTI softphone components
+│   │   ├── CtiSoftphone.tsx                      # Main softphone (Dial/Active/Contacts/Recent tabs)
+│   │   ├── DialPad.tsx                           # Number input + dial pad grid
+│   │   ├── ActiveCallPanel.tsx                   # In-call controls (mute/hold/transfer/DTMF/hangup)
+│   │   ├── ContactSearch.tsx                     # CRM contact search + click-to-call
+│   │   ├── RecentCalls.tsx                       # Recent call list + click-to-call
+│   │   ├── CallWrapUp.tsx                        # Post-call notes + disposition
+│   │   └── ScreenPopup.tsx                       # Incoming call screen pop overlay
 │   └── admin/connectors/                         # Marketplace UI components
 │
 ├── lib/
@@ -334,6 +342,49 @@ docs/
 - **Zoho org**: MZCorp (production)
 - **Railway DB (public)**: `postgresql://postgres:RTlsymtUpppLDprRblAIAlFgtnTxjQxc@caboose.proxy.rlwy.net:51214/railway`
 - **ENCRYPTION_KEY**: `4238176a8c55f240de731356a9bc350e9de6fe017289f06533bbf32e3d7b4f8e`
+
+## Rainbow CPaaS Integration Status
+
+### Implemented Features
+| Feature | S2S | WebRTC | Notes |
+|---------|-----|--------|-------|
+| Inbound calls (ringing/active/ended) | Yes | Yes | Full lifecycle |
+| Outbound calls (click-to-call) | 3PCC API | makePhoneCall | From DialPad, Contacts tab, RecentCalls |
+| Answer / Reject | Yes | Yes | call.answer() / call.release() |
+| Hangup | Yes | Yes | |
+| Mute / Unmute | Yes | Yes | callService.muteCall() |
+| Hold / Resume | Yes | Yes | callService.holdCall/retrieveCall() |
+| DTMF | CTI bridge | — | Keypad in ActiveCallPanel |
+| Call Transfer | CTI bridge | — | Blind transfer only |
+| Conference creation | Yes (bubble) | — | createConference() via rooms API |
+| Contact search | REST API | — | By name/email/ID via Rainbow users API |
+| CRM contact search | — | — | ContactSearch component → POST /api/v1/contacts/search |
+| Screen pop | Yes | Yes | CRM caller resolution on ringing |
+| Call logging to CRM | Yes | Yes | Idempotent via CrmService |
+| WebRTC call quality | — | Yes | RTT, jitter, packet loss, codec (3s polling) |
+
+### Not Implemented
+Instant messaging, presence/availability, channels/rooms, video calls, screen sharing, file sharing, voicemail, call recording initiation, call forwarding, IVR, call queues, attended transfer, bubble conversations.
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `src/lib/rainbow/client.ts` | REST API auth + HTTP calls |
+| `src/lib/rainbow/calls.ts` | Call/conference ops (3PCC, bubbles) |
+| `src/lib/rainbow/contacts.ts` | Contact search/lookup |
+| `src/lib/rainbow/s2s-connector.ts` | S2S worker spawner & manager |
+| `src/hooks/useRainbowWebSDK.ts` | Browser WebRTC hook (730 lines) |
+| `scripts/rainbow-s2s-worker.js` | Node.js S2S process (standalone) |
+
+## CTI Widget Features
+
+The CTI widget (`/cti-widget`) is a full softphone UI with 4 tabs:
+- **Dial**: Number input + dial pad → click-to-call via WebRTC
+- **Active**: In-call controls (answer, hangup, mute, hold, DTMF keypad, transfer)
+- **Contacts**: CRM contact search by name/email/company → click-to-call from results
+- **Recent**: Call history with disposition badges → click-to-call redial
+
+Click-to-call flow: Agent clicks phone icon → `webrtc.makeCall(number)` places Rainbow call → `POST /api/v1/cti/call/start` creates CTI tracking event → call appears in Active tab with CRM context enrichment.
 
 ## State Management
 
