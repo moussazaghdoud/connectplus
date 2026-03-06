@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { DialPad } from "./DialPad";
 import { ActiveCallPanel } from "./ActiveCallPanel";
 import { RecentCalls } from "./RecentCalls";
+import { ContactSearch } from "./ContactSearch";
 import type { ScreenPopData } from "./ScreenPopup";
 import { CallWrapUp } from "./CallWrapUp";
 import { useRainbowWebSDK } from "@/hooks/useRainbowWebSDK";
 import type { CtiCallEvent } from "@/lib/cti/types/call-event";
 
-type Tab = "phone" | "active" | "recent";
+type Tab = "phone" | "active" | "recent" | "contacts";
 type RainbowStatus = "disconnected" | "connecting" | "connected" | "error";
 
 interface Props {
@@ -250,10 +251,15 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
   );
 
   const handleDial = useCallback(
-    (number: string) => {
+    async (number: string) => {
+      // Initiate actual Rainbow call if WebRTC is connected
+      if (rbStatus === "connected") {
+        await webrtc.makeCall(number);
+      }
+      // Also create the CTI tracking event
       callAction("start", { number });
     },
-    [callAction]
+    [callAction, rbStatus, webrtc]
   );
 
   // BroadcastChannel to communicate with /widget tab for real Rainbow call control
@@ -455,6 +461,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
               icon: "🔔",
               badge: activeCall ? 1 : 0,
             },
+            { id: "contacts" as Tab, label: "Contacts", icon: "👤" },
             { id: "recent" as Tab, label: "Recent", icon: "📋" },
           ] as const
         ).map((t) => (
@@ -503,6 +510,9 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
             onTransfer={handleTransfer}
             onDtmf={handleDtmf}
           />
+        )}
+        {tab === "contacts" && (
+          <ContactSearch onClickToCall={handleDial} />
         )}
         {tab === "recent" && (
           <RecentCalls calls={recentCalls} onClickToCall={handleDial} />
