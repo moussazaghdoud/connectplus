@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#002050"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="11" fill="white">D365</text>
+  <!-- Microsoft Dynamics cube -->
+  <path d="M11 12l9-4v12l-9 4V12z" fill="#2D7DD2"/>
+  <path d="M20 8l9 4v12l-9 4V8z" fill="#4EA8DE"/>
+  <path d="M11 12l9 4 9-4" fill="none" stroke="white" stroke-width="0.5" opacity="0.4"/>
+  <path d="M20 16v12" stroke="white" stroke-width="0.5" opacity="0.4"/>
 </svg>

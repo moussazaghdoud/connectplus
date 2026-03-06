@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#03363D"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="20" fill="white">Z</text>
+  <!-- Zendesk shape: triangle + circle -->
+  <polygon points="10,28 22,28 10,16" fill="white"/>
+  <circle cx="28" cy="16" r="6" fill="white"/>
+  <polygon points="18,12 30,12 30,24" fill="white" opacity="0.6"/>
+  <circle cx="12" cy="24" r="2" fill="white" opacity="0.6"/>
 </svg>

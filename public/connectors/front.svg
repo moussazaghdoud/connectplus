@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#EC4899"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="20" fill="white">F</text>
+  <!-- Front email/envelope icon -->
+  <path d="M8 14a3 3 0 013-3h18a3 3 0 013 3v12a3 3 0 01-3 3H11a3 3 0 01-3-3V14z" fill="white"/>
+  <path d="M8 14l12 8 12-8" fill="none" stroke="#EC4899" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M8 28l9-7" stroke="#EC4899" stroke-width="1.5"/>
+  <path d="M32 28l-9-7" stroke="#EC4899" stroke-width="1.5"/>
 </svg>

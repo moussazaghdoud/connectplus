@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#0070F2"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="13" fill="white">SAP</text>
+  <!-- SAP diamond/hexagon logo -->
+  <path d="M20 8l12 7v10l-12 7-12-7V15l12-7z" fill="white"/>
+  <text x="20" y="24" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="11" fill="#0070F2">SAP</text>
 </svg>

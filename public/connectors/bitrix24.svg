@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#2FC6F6"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="13" fill="white">B24</text>
+  <!-- Bitrix24 chat/shield icon -->
+  <path d="M10 12a3 3 0 013-3h14a3 3 0 013 3v12a3 3 0 01-3 3H18l-5 4v-4h-1a3 3 0 01-3-3V12z" fill="white"/>
+  <rect x="15" y="14" width="10" height="2" rx="1" fill="#2FC6F6"/>
+  <rect x="15" y="18" width="7" height="2" rx="1" fill="#2FC6F6"/>
+  <rect x="15" y="22" width="4" height="2" rx="1" fill="#2FC6F6"/>
 </svg>

@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#00A1E0"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="16" fill="white">SF</text>
+  <!-- Salesforce cloud icon -->
+  <path d="M16.5 12a6.5 6.5 0 0112.2 2.3A5.5 5.5 0 0130 25H11a5 5 0 01-.5-9.97A6.5 6.5 0 0116.5 12z" fill="white"/>
 </svg>

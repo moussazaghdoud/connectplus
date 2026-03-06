@@ -1,4 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#FFCA28"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="16" fill="#333333">HF</text>
+  <!-- HappyFox smiley face -->
+  <circle cx="20" cy="20" r="11" fill="white"/>
+  <!-- Eyes -->
+  <circle cx="16" cy="17" r="2" fill="#333"/>
+  <circle cx="24" cy="17" r="2" fill="#333"/>
+  <!-- Smile -->
+  <path d="M14 23a7 7 0 0012 0" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"/>
+  <!-- Fox ears -->
+  <path d="M10 10l3 6-5 1z" fill="#FFCA28"/>
+  <path d="M30 10l-3 6 5 1z" fill="#FFCA28"/>
 </svg>

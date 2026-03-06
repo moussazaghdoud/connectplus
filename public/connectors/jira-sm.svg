@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#0052CC"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="20" fill="white">J</text>
+  <!-- Jira diamond shape -->
+  <path d="M20 6l14 14-14 14L6 20 20 6z" fill="white" opacity="0.2"/>
+  <path d="M20 10l10 10-10 10-10-10 10-10z" fill="white"/>
+  <path d="M20 10l10 10-10 10" fill="#DEEBFF"/>
 </svg>

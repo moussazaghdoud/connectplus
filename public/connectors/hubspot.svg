@@ -1,4 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#FF7A59"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="20" fill="white">H</text>
+  <!-- HubSpot sprocket icon -->
+  <g transform="translate(20,20)">
+    <circle cx="0" cy="0" r="4" fill="white"/>
+    <circle cx="0" cy="0" r="2.5" fill="#FF7A59"/>
+    <!-- Spokes -->
+    <rect x="-1" y="-9" width="2" height="5" rx="1" fill="white"/>
+    <rect x="-1" y="4" width="2" height="5" rx="1" fill="white"/>
+    <rect x="-9" y="-1" width="5" height="2" rx="1" fill="white"/>
+    <rect x="4" y="-1" width="5" height="2" rx="1" fill="white"/>
+    <!-- Diagonal spokes -->
+    <rect x="-1" y="-9" width="2" height="5" rx="1" fill="white" transform="rotate(45)"/>
+    <rect x="-1" y="4" width="2" height="5" rx="1" fill="white" transform="rotate(45)"/>
+    <rect x="-1" y="-9" width="2" height="5" rx="1" fill="white" transform="rotate(-45)"/>
+    <rect x="-1" y="4" width="2" height="5" rx="1" fill="white" transform="rotate(-45)"/>
+    <!-- Outer dots -->
+    <circle cx="0" cy="-10.5" r="1.5" fill="white"/>
+    <circle cx="0" cy="10.5" r="1.5" fill="white"/>
+    <circle cx="-10.5" cy="0" r="1.5" fill="white"/>
+    <circle cx="10.5" cy="0" r="1.5" fill="white"/>
+    <circle cx="7.4" cy="-7.4" r="1.5" fill="white"/>
+    <circle cx="-7.4" cy="7.4" r="1.5" fill="white"/>
+    <circle cx="7.4" cy="7.4" r="1.5" fill="white"/>
+    <circle cx="-7.4" cy="-7.4" r="1.5" fill="white"/>
+  </g>
 </svg>

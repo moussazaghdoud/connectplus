@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
   <rect width="40" height="40" rx="8" fill="#E61718"/>
-  <text x="20" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="20" fill="white">S</text>
+  <!-- SugarCRM cube icon -->
+  <path d="M20 8l10 6v12l-10 6-10-6V14l10-6z" fill="none" stroke="white" stroke-width="2"/>
+  <path d="M20 8l10 6-10 6-10-6 10-6z" fill="white" opacity="0.3"/>
+  <path d="M20 20v12" stroke="white" stroke-width="1.5"/>
+  <path d="M10 14l10 6" stroke="white" stroke-width="1.5"/>
+  <path d="M30 14l-10 6" stroke="white" stroke-width="1.5"/>
 </svg>
