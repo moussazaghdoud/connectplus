@@ -30,7 +30,7 @@ export const POST = apiHandler(async (request: NextRequest, ctx) => {
     );
   }
 
-  const call = getCall(ctx.tenant.tenantId, callId);
+  const call = await getCall(ctx.tenant.tenantId, callId);
   if (!call) {
     return NextResponse.json({ error: "Call not found" }, { status: 404 });
   }

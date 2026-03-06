@@ -51,10 +51,10 @@ export interface RawTelephonyEvent {
  */
 export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent | null> {
   // 1. Correlate
-  const correlationId = getCorrelationId(raw.callId, raw.tenantId, raw.agentId);
+  const correlationId = await getCorrelationId(raw.callId, raw.tenantId, raw.agentId);
 
   // 2. De-duplicate
-  if (isDuplicateEvent(correlationId, raw.state, raw.timestamp)) {
+  if (await isDuplicateEvent(correlationId, raw.state, raw.timestamp)) {
     metrics.increment("cti_events_deduplicated_processor");
     return null;
   }
@@ -92,14 +92,14 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
     }
   } else {
     // Carry forward CRM context from existing call state
-    const existing = getCall(raw.tenantId, raw.callId);
+    const existing = await getCall(raw.tenantId, raw.callId);
     if (existing?.crmContext) {
       event.crmContext = existing.crmContext;
     }
   }
 
   // 5. Update call state store
-  updateCallState(event);
+  await updateCallState(event);
 
   // 5b. Store call context + trigger screen pop on ringing
   if (raw.state === "ringing") {
@@ -204,7 +204,7 @@ export async function processEvent(raw: RawTelephonyEvent): Promise<CtiCallEvent
       log.error({ err, correlationId }, "Failed to log call to CRM");
     }
 
-    clearCorrelation(raw.callId);
+    await clearCorrelation(raw.callId);
   }
 
   return event;

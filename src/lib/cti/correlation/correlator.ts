@@ -5,11 +5,14 @@
  * - Maps provider callId -> correlationId
  * - De-duplicates events using idempotency keys (same state within ±2s = dup)
  * - Survives widget reconnections without creating duplicate CRM logs
+ *
+ * Uses Redis when REDIS_URL is set, otherwise falls back to in-memory Map.
  */
 
 import { randomUUID } from "node:crypto";
 import { makeIdempotencyKey } from "../types/call-event";
 import type { CallState } from "../types/call-event";
+import { createStore, type StateStore } from "../../state/store";
 import { logger } from "../../observability/logger";
 
 const log = logger.child({ module: "cti-correlator" });
@@ -22,41 +25,27 @@ interface CorrelationEntry {
   createdAt: number;
 }
 
-// In-memory stores (production would use Redis)
-const KEY = Symbol.for("cti.correlator");
+// 4 hour TTL — calls older than this are stale
+const CALL_TTL = 4 * 60 * 60 * 1000;
+// Dedup events expire after 1 hour
+const EVENT_TTL = 60 * 60 * 1000;
 
-interface CorrelatorState {
-  /** providerCallId -> correlationEntry */
-  correlationMap: Map<string, CorrelationEntry>;
-  /** idempotencyKey -> timestamp */
-  seenEvents: Map<string, number>;
-}
-
-function getState(): CorrelatorState {
-  const g = globalThis as Record<symbol, CorrelatorState>;
-  if (!g[KEY]) {
-    g[KEY] = {
-      correlationMap: new Map(),
-      seenEvents: new Map(),
-    };
-  }
-  return g[KEY];
-}
+const correlationStore: StateStore<CorrelationEntry> = createStore("cti:corr", { ttlMs: CALL_TTL });
+const seenEventsStore: StateStore<number> = createStore("cti:seen", { ttlMs: EVENT_TTL });
 
 /**
  * Get or create a correlationId for a provider call.
  */
-export function getCorrelationId(
+export async function getCorrelationId(
   providerCallId: string,
   tenantId: string,
   agentId: string
-): string {
-  const state = getState();
-  const existing = state.correlationMap.get(providerCallId);
+): Promise<string> {
+  const existing = await correlationStore.get(providerCallId);
   if (existing) return existing.correlationId;
 
   const correlationId = randomUUID();
-  state.correlationMap.set(providerCallId, {
+  await correlationStore.set(providerCallId, {
     correlationId,
     providerCallId,
     tenantId,
@@ -75,30 +64,29 @@ export function getCorrelationId(
 /**
  * Look up an existing correlationId (returns undefined if not found).
  */
-export function lookupCorrelation(
+export async function lookupCorrelation(
   providerCallId: string
-): CorrelationEntry | undefined {
-  return getState().correlationMap.get(providerCallId);
+): Promise<CorrelationEntry | undefined> {
+  return correlationStore.get(providerCallId);
 }
 
 /**
  * Check if an event is a duplicate (same correlationId + state within ±2s).
  * Returns true if this is a DUPLICATE that should be skipped.
  */
-export function isDuplicateEvent(
+export async function isDuplicateEvent(
   correlationId: string,
   state: CallState,
   timestamp: string
-): boolean {
-  const store = getState();
+): Promise<boolean> {
   const key = makeIdempotencyKey(correlationId, state, timestamp);
 
-  if (store.seenEvents.has(key)) {
+  if (await seenEventsStore.has(key)) {
     log.debug({ correlationId, state, key }, "Duplicate CTI event suppressed");
     return true;
   }
 
-  store.seenEvents.set(key, Date.now());
+  await seenEventsStore.set(key, Date.now());
   return false;
 }
 
@@ -106,31 +94,6 @@ export function isDuplicateEvent(
  * Remove a completed call from the correlation map.
  * Called after call logging is confirmed.
  */
-export function clearCorrelation(providerCallId: string): void {
-  getState().correlationMap.delete(providerCallId);
-}
-
-/**
- * Periodic cleanup of stale entries (calls older than 4 hours).
- */
-export function cleanupStaleEntries(): void {
-  const state = getState();
-  const cutoff = Date.now() - 4 * 60 * 60 * 1000;
-
-  for (const [key, entry] of state.correlationMap) {
-    if (entry.createdAt < cutoff) {
-      state.correlationMap.delete(key);
-    }
-  }
-
-  for (const [key, ts] of state.seenEvents) {
-    if (ts < cutoff) {
-      state.seenEvents.delete(key);
-    }
-  }
-}
-
-// Run cleanup every 30 minutes
-if (typeof setInterval !== "undefined") {
-  setInterval(cleanupStaleEntries, 30 * 60 * 1000).unref?.();
+export async function clearCorrelation(providerCallId: string): Promise<void> {
+  await correlationStore.delete(providerCallId);
 }

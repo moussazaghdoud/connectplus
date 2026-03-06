@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const subscriberId = randomUUID();
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       addSubscriber({
         id: subscriberId,
         tenantId,
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       });
 
       // Send current active calls for reconnection sync
-      const activeCalls = getAgentCalls(tenantId, agentId);
+      const activeCalls = await getAgentCalls(tenantId, agentId);
       if (activeCalls.length > 0) {
         const encoder = new TextEncoder();
         const payload = `event: state.sync\ndata: ${JSON.stringify({ activeCalls })}\n\n`;
