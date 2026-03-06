@@ -1,10 +1,10 @@
 /**
  * Seed script for Connector Marketplace definitions.
  *
- * Upserts 9 connector definitions:
- *   - zoho-crm (ACTIVE, CONFIG_DRIVEN) — preserves existing config if present
- *   - hubspot  (ACTIVE, CODE_BASED)    — metadata row for marketplace display
- *   - salesforce, dynamics-365, zendesk, freshdesk, servicenow, pipedrive, intercom (DRAFT)
+ * Upserts 29 connector definitions across CRM, Helpdesk, and Enterprise categories:
+ *   - zoho-crm (ACTIVE, CONFIG_DRIVEN)
+ *   - hubspot  (ACTIVE, CODE_BASED)
+ *   - 27 config-driven connectors (Salesforce, Dynamics, Zendesk, Freshdesk, etc.)
  *
  * Usage:
  *   npx tsx prisma/seed-marketplace.ts
@@ -737,6 +737,1298 @@ const connectors = [
       healthCheck: { endpoint: "/me", method: "GET", expectedStatus: 200 },
     },
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  NEW BATCH — 20 Additional Connectors
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ──────────────── MONDAY.COM CRM ────────────────
+  {
+    slug: "monday-crm",
+    name: "Monday.com CRM",
+    shortDesc: "Screen-pop and contact lookup with Monday.com CRM",
+    description: "Config-driven connector for Monday.com CRM with OAuth2, items search via GraphQL-over-REST, and activity write-back.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://monday.com/",
+    docsUrl: "https://developer.monday.com/api-reference/reference",
+    iconName: "monday",
+    prerequisites: [
+      "Monday.com account with CRM product enabled",
+      "Admin access to create an app in Monday Apps Marketplace",
+      "OAuth scopes: boards:read, account:read",
+    ],
+    setupSteps: makeSetupSteps("monday-crm", {
+      portalName: "Monday.com Developer App",
+      portalUrl: "https://auth.monday.com/",
+      portalInstructions: "1. Go to [Monday.com Developers](https://monday.com/developers/apps)\n2. Create a new app\n3. Under **OAuth**, add the redirect URI below\n4. Select scopes: `boards:read`, `account:read`",
+      credentialFields: [
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Monday.com",
+    }),
+    config: {
+      apiBaseUrl: "https://api.monday.com/v2",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://auth.monday.com/oauth2/authorize",
+          tokenUrl: "https://auth.monday.com/oauth2/token",
+          scopes: ["boards:read", "account:read"],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "",
+        method: "POST",
+        request: {
+          bodyTemplate: JSON.stringify({
+            query: `{ items_page_by_column_values (limit: 5, board_id: 0, columns: [{column_id: "phone", column_values: ["{{query}}"]}]) { items { id name column_values { id text } } } }`,
+          }),
+        },
+        response: { resultsPath: "data.items_page_by_column_values.items", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        phone: "column_values.0.text",
+        email: "column_values.1.text",
+      },
+      healthCheck: { endpoint: "", method: "POST", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── COPPER CRM ────────────────
+  {
+    slug: "copper",
+    name: "Copper",
+    shortDesc: "Screen-pop and contact lookup with Copper CRM",
+    description: "Config-driven connector for Copper (Google Workspace CRM) with API key auth, people search, and activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.copper.com/",
+    docsUrl: "https://developer.copper.com/",
+    iconName: "copper",
+    prerequisites: [
+      "Copper account (any plan with API access)",
+      "Admin access to generate an API key",
+      "Your Copper account email address",
+    ],
+    setupSteps: [
+      {
+        id: "api-key",
+        title: "Get API Key",
+        description: "Generate your Copper API key",
+        type: "instruction",
+        content: "1. Log in to Copper\n2. Go to **Settings > Integrations > API Keys**\n3. Click **Generate API Key**\n4. Copy the key",
+      },
+      {
+        id: "credentials",
+        title: "Enter Credentials",
+        type: "credentials",
+        fields: [
+          { key: "email", label: "Account Email", type: "text", required: true, placeholder: "admin@yourcompany.com" },
+          { key: "apiKey", label: "API Key", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://api.copper.com/developer_api/v1",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "X-PW-AccessToken", prefix: "" },
+      },
+      contactSearch: {
+        endpoint: "/people/search",
+        method: "POST",
+        request: {
+          bodyTemplate: JSON.stringify({
+            phone_number: "{{phone}}",
+            page_size: 5,
+          }),
+        },
+        response: { resultsPath: "$", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        email: "emails.0.email",
+        phone: "phone_numbers.0.number",
+        company: "company_name",
+        title: "title",
+      },
+      crmLink: {
+        urlTemplate: "https://app.copper.com/companies/{{orgId}}/app#/people/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/account", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── FRESHSALES ────────────────
+  {
+    slug: "freshsales",
+    name: "Freshsales",
+    shortDesc: "Screen-pop and contact lookup with Freshsales CRM",
+    description: "Config-driven connector for Freshsales (Freshworks CRM) with API key auth, contact/lead search, and note logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.freshworks.com/crm/sales/",
+    docsUrl: "https://developers.freshworks.com/crm/api/",
+    iconName: "freshsales",
+    prerequisites: [
+      "Freshsales account (Growth plan or higher)",
+      "Admin access to find your API key",
+      "Your Freshsales domain (e.g. yourcompany.myfreshworks.com)",
+    ],
+    setupSteps: [
+      {
+        id: "domain",
+        title: "Enter Domain",
+        type: "credentials",
+        fields: [
+          { key: "domain", label: "Freshsales Domain", type: "text", required: true, placeholder: "yourcompany.myfreshworks.com" },
+        ],
+      },
+      {
+        id: "api-key",
+        title: "Get API Key",
+        type: "instruction",
+        content: "1. Log in to Freshsales\n2. Click your profile icon → **Settings**\n3. Go to **API Settings**\n4. Copy your API key",
+      },
+      {
+        id: "credentials",
+        title: "Enter API Key",
+        type: "credentials",
+        fields: [
+          { key: "apiKey", label: "API Key", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://yourcompany.myfreshworks.com/crm/sales/api",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Token token=" },
+      },
+      contactSearch: {
+        endpoint: "/search",
+        method: "GET",
+        request: { queryParams: { q: "{{query}}", include: "contact" } },
+        response: { resultsPath: "$", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "display_name",
+        email: "email",
+        phone: "work_number || mobile_number",
+        company: "company.name",
+        title: "job_title",
+      },
+      crmLink: {
+        urlTemplate: "https://yourcompany.myfreshworks.com/crm/sales/contacts/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/contacts/filters", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── CLOSE CRM ────────────────
+  {
+    slug: "close",
+    name: "Close",
+    shortDesc: "Screen-pop and contact lookup with Close CRM",
+    description: "Config-driven connector for Close CRM with API key auth, lead/contact search, and call activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.close.com/",
+    docsUrl: "https://developer.close.com/",
+    iconName: "close",
+    prerequisites: [
+      "Close account (any plan with API access)",
+      "Admin access to generate an API key",
+    ],
+    setupSteps: [
+      {
+        id: "api-key",
+        title: "Get API Key",
+        type: "instruction",
+        content: "1. Log in to Close\n2. Go to **Settings > Developer > API Keys**\n3. Click **Create API Key**\n4. Copy the key",
+      },
+      {
+        id: "credentials",
+        title: "Enter API Key",
+        type: "credentials",
+        fields: [
+          { key: "apiKey", label: "API Key", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://api.close.com/api/v1",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Basic " },
+      },
+      contactSearch: {
+        endpoint: "/contact",
+        method: "GET",
+        request: { queryParams: { query: "phone:\"{{phone}}\"", _limit: "5" } },
+        response: { resultsPath: "data", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        email: "emails.0.email",
+        phone: "phones.0.phone",
+        company: "lead_name",
+        title: "title",
+      },
+      writeBack: {
+        endpoint: "/activity/call",
+        method: "POST",
+        bodyTemplate: JSON.stringify({
+          direction: "{{interaction.direction}}",
+          duration: "{{interaction.durationSecs}}",
+          phone: "{{interaction.metadata.fromNumber}}",
+          note: "Call via Rainbow CTI",
+          status: "completed",
+        }),
+      },
+      crmLink: {
+        urlTemplate: "https://app.close.com/contact/{{recordId}}/",
+      },
+      healthCheck: { endpoint: "/me", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── SUGARCRM ────────────────
+  {
+    slug: "sugarcrm",
+    name: "SugarCRM",
+    shortDesc: "Screen-pop and contact lookup with SugarCRM",
+    description: "Config-driven connector for SugarCRM with OAuth2, contact/lead search, and call activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.sugarcrm.com/",
+    docsUrl: "https://support.sugarcrm.com/Documentation/Sugar_Developer/Sugar_Developer_Guide/Integration/Web_Services/REST_API/",
+    iconName: "sugarcrm",
+    prerequisites: [
+      "SugarCRM instance (Professional or higher)",
+      "Admin access to create an OAuth2 key in Admin > OAuth Keys",
+      "Your SugarCRM instance URL",
+    ],
+    setupSteps: makeSetupSteps("sugarcrm", {
+      portalName: "SugarCRM OAuth Key",
+      portalUrl: "https://support.sugarcrm.com/",
+      portalInstructions: "1. Log in to SugarCRM as admin\n2. Go to **Admin > OAuth Keys**\n3. Click **Create** and enter a name\n4. Set the **Redirect URL** to the value below\n5. Note the **Consumer Key** and **Consumer Secret**",
+      credentialFields: [
+        { key: "instanceUrl", label: "Instance URL", type: "url", required: true, placeholder: "https://yourcompany.sugarondemand.com" },
+        { key: "clientId", label: "Consumer Key", type: "text", required: true },
+        { key: "clientSecret", label: "Consumer Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect SugarCRM",
+    }),
+    config: {
+      apiBaseUrl: "https://yourcompany.sugarondemand.com/rest/v11_15",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://yourcompany.sugarondemand.com/rest/v11_15/oauth2/authorize",
+          tokenUrl: "https://yourcompany.sugarondemand.com/rest/v11_15/oauth2/token",
+          scopes: [],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/Contacts/filter",
+        method: "POST",
+        request: {
+          bodyTemplate: JSON.stringify({
+            filter: [{ "$or": [{ phone_work: { "$contains": "{{phone}}" } }, { phone_mobile: { "$contains": "{{phone}}" } }] }],
+            fields: "id,first_name,last_name,email,phone_work,phone_mobile,account_name,title",
+            max_num: 5,
+          }),
+        },
+        response: { resultsPath: "records", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "{{first_name}} {{last_name}}",
+        email: "email.0.email_address",
+        phone: "phone_work || phone_mobile",
+        company: "account_name",
+        title: "title",
+      },
+      crmLink: {
+        urlTemplate: "https://yourcompany.sugarondemand.com/#Contacts/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/me", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── INSIGHTLY ────────────────
+  {
+    slug: "insightly",
+    name: "Insightly",
+    shortDesc: "Screen-pop and contact lookup with Insightly CRM",
+    description: "Config-driven connector for Insightly CRM with API key auth, contact search, and event logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.insightly.com/",
+    docsUrl: "https://api.insightly.com/v3.1/Help",
+    iconName: "insightly",
+    prerequisites: [
+      "Insightly account (Plus plan or higher for API access)",
+      "Admin access to find your API key",
+    ],
+    setupSteps: [
+      {
+        id: "api-key",
+        title: "Get API Key",
+        type: "instruction",
+        content: "1. Log in to Insightly\n2. Click your avatar → **User Settings**\n3. Scroll to **API Key** section\n4. Copy the API key",
+      },
+      {
+        id: "credentials",
+        title: "Enter API Key",
+        type: "credentials",
+        fields: [
+          { key: "apiKey", label: "API Key", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://api.insightly.com/v3.1",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Basic " },
+      },
+      contactSearch: {
+        endpoint: "/Contacts/Search",
+        method: "GET",
+        request: { queryParams: { phone: "{{phone}}", top: "5" } },
+        response: { resultsPath: "$", idField: "CONTACT_ID" },
+      },
+      contactFieldMapping: {
+        displayName: "{{FIRST_NAME}} {{LAST_NAME}}",
+        email: "EMAIL_ADDRESS",
+        phone: "PHONE || PHONE_MOBILE",
+        company: "ORGANISATION_NAME",
+        title: "TITLE",
+      },
+      crmLink: {
+        urlTemplate: "https://crm.insightly.com/contacts/details/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/Instance", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── NUTSHELL ────────────────
+  {
+    slug: "nutshell",
+    name: "Nutshell",
+    shortDesc: "Screen-pop and contact lookup with Nutshell CRM",
+    description: "Config-driven connector for Nutshell CRM with API key auth, contact search, and activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.nutshell.com/",
+    docsUrl: "https://developers.nutshell.com/",
+    iconName: "nutshell",
+    prerequisites: [
+      "Nutshell account (any plan)",
+      "API key from Nutshell settings",
+    ],
+    setupSteps: [
+      {
+        id: "api-key",
+        title: "Get API Key",
+        type: "instruction",
+        content: "1. Log in to Nutshell\n2. Go to **Setup > API Keys**\n3. Click **New API Key**\n4. Copy the key and your email",
+      },
+      {
+        id: "credentials",
+        title: "Enter Credentials",
+        type: "credentials",
+        fields: [
+          { key: "email", label: "Account Email", type: "text", required: true },
+          { key: "apiKey", label: "API Key", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://app.nutshell.com/api/v1/json",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Basic " },
+      },
+      contactSearch: {
+        endpoint: "",
+        method: "POST",
+        request: {
+          bodyTemplate: JSON.stringify({
+            method: "searchContacts",
+            params: { query: "{{phone}}" },
+          }),
+        },
+        response: { resultsPath: "result", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        email: "email.0",
+        phone: "phone.0",
+        company: "accounts.0.name",
+      },
+      healthCheck: { endpoint: "", method: "POST", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── CAPSULE CRM ────────────────
+  {
+    slug: "capsule",
+    name: "Capsule CRM",
+    shortDesc: "Screen-pop and contact lookup with Capsule CRM",
+    description: "Config-driven connector for Capsule CRM with OAuth2, party search, and task/note logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://capsulecrm.com/",
+    docsUrl: "https://developer.capsulecrm.com/v2/",
+    iconName: "capsule",
+    prerequisites: [
+      "Capsule CRM account (Professional plan for API access)",
+      "Admin access to register an application",
+    ],
+    setupSteps: makeSetupSteps("capsule", {
+      portalName: "Capsule Registered App",
+      portalUrl: "https://capsulecrm.com/",
+      portalInstructions: "1. Go to [Capsule Developer](https://developer.capsulecrm.com/)\n2. Register a new application\n3. Set the **Redirect URI** to the value below\n4. Note the **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Capsule",
+    }),
+    config: {
+      apiBaseUrl: "https://api.capsulecrm.com/api/v2",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://api.capsulecrm.com/oauth/authorise",
+          tokenUrl: "https://api.capsulecrm.com/oauth/token",
+          scopes: [],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/parties/search",
+        method: "GET",
+        request: { queryParams: { q: "{{query}}", perPage: "5" } },
+        response: { resultsPath: "parties", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "{{firstName}} {{lastName}}",
+        email: "emailAddresses.0.address",
+        phone: "phoneNumbers.0.number",
+        company: "organisation.name",
+        title: "jobTitle",
+      },
+      crmLink: {
+        urlTemplate: "https://{{subdomain}}.capsulecrm.com/party/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/users", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── KEAP (INFUSIONSOFT) ────────────────
+  {
+    slug: "keap",
+    name: "Keap",
+    shortDesc: "Screen-pop and contact lookup with Keap CRM",
+    description: "Config-driven connector for Keap (formerly Infusionsoft) with OAuth2, contact search, and note logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://keap.com/",
+    docsUrl: "https://developer.keap.com/docs/restv2/",
+    iconName: "keap",
+    prerequisites: [
+      "Keap account (Pro plan or higher for API access)",
+      "Developer account at developer.keap.com",
+    ],
+    setupSteps: makeSetupSteps("keap", {
+      portalName: "Keap Developer App",
+      portalUrl: "https://developer.keap.com/",
+      portalInstructions: "1. Go to [Keap Developer Portal](https://developer.keap.com/)\n2. Create a new API key/app\n3. Set the **Redirect URI** to the value below\n4. Note your **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Keap",
+    }),
+    config: {
+      apiBaseUrl: "https://api.infusionsoft.com/crm/rest/v2",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://accounts.infusionsoft.com/app/oauth/authorize",
+          tokenUrl: "https://api.infusionsoft.com/token",
+          scopes: [],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/contacts",
+        method: "GET",
+        request: { queryParams: { filter: "phone_number=={{phone}}", limit: "5" } },
+        response: { resultsPath: "contacts", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "{{given_name}} {{family_name}}",
+        email: "email_addresses.0.email",
+        phone: "phone_numbers.0.number",
+        company: "company.company_name",
+        title: "job_title",
+      },
+      crmLink: {
+        urlTemplate: "https://app.keap.com/contact/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/account/profile", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── BITRIX24 ────────────────
+  {
+    slug: "bitrix24",
+    name: "Bitrix24",
+    shortDesc: "Screen-pop and contact lookup with Bitrix24 CRM",
+    description: "Config-driven connector for Bitrix24 with OAuth2, CRM contact/lead search, and activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.bitrix24.com/",
+    docsUrl: "https://training.bitrix24.com/rest_help/",
+    iconName: "bitrix24",
+    prerequisites: [
+      "Bitrix24 account (any plan with REST API)",
+      "Admin access to register a local app",
+      "Your Bitrix24 portal URL (e.g. yourcompany.bitrix24.com)",
+    ],
+    setupSteps: makeSetupSteps("bitrix24", {
+      portalName: "Bitrix24 Local App",
+      portalUrl: "https://www.bitrix24.com/",
+      portalInstructions: "1. Go to **Developer resources** in your Bitrix24 portal\n2. Click **Other > Local application**\n3. Set the **Redirect URI** to the value below\n4. Select permissions: `crm`, `telephony`\n5. Note the **client_id** and **client_secret**",
+      credentialFields: [
+        { key: "portalUrl", label: "Portal URL", type: "url", required: true, placeholder: "https://yourcompany.bitrix24.com" },
+        { key: "clientId", label: "client_id", type: "text", required: true },
+        { key: "clientSecret", label: "client_secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Bitrix24",
+    }),
+    config: {
+      apiBaseUrl: "https://yourcompany.bitrix24.com/rest",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://yourcompany.bitrix24.com/oauth/authorize/",
+          tokenUrl: "https://oauth.bitrix.info/oauth/token/",
+          scopes: ["crm", "telephony"],
+          tokenPlacement: "query",
+          tokenPrefix: "",
+        },
+      },
+      contactSearch: {
+        endpoint: "/crm.contact.list",
+        method: "GET",
+        request: {
+          queryParams: {
+            "filter[PHONE]": "{{phone}}",
+            "select[]": "ID,NAME,LAST_NAME,EMAIL,PHONE,COMPANY_TITLE,POST",
+          },
+        },
+        response: { resultsPath: "result", idField: "ID" },
+      },
+      contactFieldMapping: {
+        displayName: "{{NAME}} {{LAST_NAME}}",
+        email: "EMAIL.0.VALUE",
+        phone: "PHONE.0.VALUE",
+        company: "COMPANY_TITLE",
+        title: "POST",
+      },
+      crmLink: {
+        urlTemplate: "https://yourcompany.bitrix24.com/crm/contact/details/{{recordId}}/",
+      },
+      healthCheck: { endpoint: "/profile", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── ZOHO DESK ────────────────
+  {
+    slug: "zoho-desk",
+    name: "Zoho Desk",
+    shortDesc: "Screen-pop and ticket lookup with Zoho Desk",
+    description: "Config-driven connector for Zoho Desk with OAuth2, contact/ticket search, and ticket comment write-back.",
+    category: "HELPDESK" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.zoho.com/desk/",
+    docsUrl: "https://desk.zoho.com/DeskAPIDocument",
+    iconName: "zoho-desk",
+    prerequisites: [
+      "Zoho Desk account with API access",
+      "Admin access to Zoho API Console",
+      "Your Zoho Desk org ID",
+    ],
+    setupSteps: makeSetupSteps("zoho-desk", {
+      portalName: "Zoho API Console App",
+      portalUrl: "https://api-console.zoho.com/",
+      portalInstructions: "1. Go to [Zoho API Console](https://api-console.zoho.com/)\n2. Use your existing ConnectPlus app or create a new one\n3. Add the **Redirect URI** below\n4. Note the **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+        { key: "orgId", label: "Org ID", type: "text", required: true, placeholder: "Your Zoho Desk Org ID" },
+      ],
+      oauthButtonLabel: "Connect Zoho Desk",
+    }),
+    config: {
+      apiBaseUrl: "https://desk.zoho.com/api/v1",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://accounts.zoho.com/oauth/v2/auth",
+          tokenUrl: "https://accounts.zoho.com/oauth/v2/token",
+          scopes: ["Desk.contacts.READ", "Desk.tickets.READ", "Desk.tickets.WRITE"],
+          tokenPlacement: "header",
+          tokenPrefix: "Zoho-oauthtoken",
+          extraAuthParams: { access_type: "offline", prompt: "consent" },
+        },
+      },
+      contactSearch: {
+        endpoint: "/contacts/search",
+        method: "GET",
+        request: { queryParams: { searchStr: "{{phone}}", limit: "5" } },
+        response: { resultsPath: "data", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "{{firstName}} {{lastName}}",
+        email: "email",
+        phone: "phone",
+        company: "accountName",
+      },
+      crmLink: {
+        urlTemplate: "https://desk.zoho.com/support/{{orgId}}/ShowHomePage.do#Contacts/dv/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/organizations", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── JIRA SERVICE MANAGEMENT ────────────────
+  {
+    slug: "jira-sm",
+    name: "Jira Service Management",
+    shortDesc: "Screen-pop and customer lookup with Jira Service Management",
+    description: "Config-driven connector for Jira Service Management with OAuth2 (Atlassian), customer search, and issue creation.",
+    category: "HELPDESK" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.atlassian.com/software/jira/service-management",
+    docsUrl: "https://developer.atlassian.com/cloud/jira/service-desk/rest/intro/",
+    iconName: "jira",
+    prerequisites: [
+      "Jira Service Management Cloud instance",
+      "Atlassian Developer account to register an OAuth 2.0 app",
+      "Your Jira Cloud site URL",
+    ],
+    setupSteps: makeSetupSteps("jira-sm", {
+      portalName: "Atlassian Developer App",
+      portalUrl: "https://developer.atlassian.com/console/myapps/",
+      portalInstructions: "1. Go to [Atlassian Developer Console](https://developer.atlassian.com/console/myapps/)\n2. Create a new **OAuth 2.0 (3LO)** app\n3. Under **Authorization**, add the **Callback URL** below\n4. Add scopes: `read:servicedesk-request`, `write:servicedesk-request`, `read:jira-user`\n5. Note the **Client ID** and **Secret**",
+      credentialFields: [
+        { key: "siteUrl", label: "Jira Site URL", type: "url", required: true, placeholder: "https://yoursite.atlassian.net" },
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Jira SM",
+    }),
+    config: {
+      apiBaseUrl: "https://api.atlassian.com/ex/jira",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://auth.atlassian.com/authorize",
+          tokenUrl: "https://auth.atlassian.com/oauth/token",
+          scopes: ["read:servicedesk-request", "write:servicedesk-request", "read:jira-user", "offline_access"],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+          extraAuthParams: { audience: "api.atlassian.com", prompt: "consent" },
+        },
+      },
+      contactSearch: {
+        endpoint: "/rest/api/3/user/search",
+        method: "GET",
+        request: { queryParams: { query: "{{query}}", maxResults: "5" } },
+        response: { resultsPath: "$", idField: "accountId" },
+      },
+      contactFieldMapping: {
+        displayName: "displayName",
+        email: "emailAddress",
+        avatarUrl: "avatarUrls.48x48",
+      },
+      crmLink: {
+        urlTemplate: "https://yoursite.atlassian.net/people/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/rest/api/3/myself", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── HELP SCOUT ────────────────
+  {
+    slug: "helpscout",
+    name: "Help Scout",
+    shortDesc: "Screen-pop and customer lookup with Help Scout",
+    description: "Config-driven connector for Help Scout with OAuth2, customer search, and conversation note logging.",
+    category: "HELPDESK" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.helpscout.com/",
+    docsUrl: "https://developer.helpscout.com/mailbox-api/",
+    iconName: "helpscout",
+    prerequisites: [
+      "Help Scout account (Standard plan or higher)",
+      "Admin access to create an OAuth application",
+    ],
+    setupSteps: makeSetupSteps("helpscout", {
+      portalName: "Help Scout OAuth App",
+      portalUrl: "https://secure.helpscout.net/",
+      portalInstructions: "1. Go to **Your Profile > My Apps**\n2. Click **Create My App**\n3. Set the **Redirection URL** to the value below\n4. Note the **App ID** (Client ID) and **App Secret**",
+      credentialFields: [
+        { key: "clientId", label: "App ID", type: "text", required: true },
+        { key: "clientSecret", label: "App Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Help Scout",
+    }),
+    config: {
+      apiBaseUrl: "https://api.helpscout.net/v2",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://secure.helpscout.net/authentication/authorizeClientApplication",
+          tokenUrl: "https://api.helpscout.net/v2/oauth2/token",
+          scopes: [],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/customers",
+        method: "GET",
+        request: { queryParams: { query: "(phone:\"{{phone}}\")", page: "1" } },
+        response: { resultsPath: "_embedded.customers", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "{{firstName}} {{lastName}}",
+        email: "_embedded.emails.0.value",
+        phone: "_embedded.phones.0.value",
+        company: "company",
+        title: "jobTitle",
+      },
+      crmLink: {
+        urlTemplate: "https://secure.helpscout.net/customer/{{recordId}}/",
+      },
+      healthCheck: { endpoint: "/users/me", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── FRONT ────────────────
+  {
+    slug: "front",
+    name: "Front",
+    shortDesc: "Screen-pop and contact lookup with Front",
+    description: "Config-driven connector for Front with OAuth2, contact search, and conversation tagging.",
+    category: "HELPDESK" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://front.com/",
+    docsUrl: "https://dev.frontapp.com/reference/introduction",
+    iconName: "front",
+    prerequisites: [
+      "Front account (Starter plan or higher)",
+      "Admin access to create an OAuth app in Front",
+    ],
+    setupSteps: makeSetupSteps("front", {
+      portalName: "Front OAuth App",
+      portalUrl: "https://app.frontapp.com/",
+      portalInstructions: "1. Go to **Settings > Developers > OAuth Apps**\n2. Click **New app**\n3. Set the **Redirect URI** to the value below\n4. Note the **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Front",
+    }),
+    config: {
+      apiBaseUrl: "https://api2.frontapp.com",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://app.frontapp.com/oauth/authorize",
+          tokenUrl: "https://app.frontapp.com/oauth/token",
+          scopes: [],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/contacts/search",
+        method: "POST",
+        request: {
+          bodyTemplate: JSON.stringify({ query: "{{phone}}", limit: 5 }),
+        },
+        response: { resultsPath: "_results", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        email: "handles.0.handle",
+        phone: "handles.1.handle",
+        company: "groups.0.name",
+      },
+      crmLink: {
+        urlTemplate: "https://app.frontapp.com/contacts/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/me", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── HAPPYFOX ────────────────
+  {
+    slug: "happyfox",
+    name: "HappyFox",
+    shortDesc: "Screen-pop and ticket lookup with HappyFox Helpdesk",
+    description: "Config-driven connector for HappyFox with API key auth, contact search, and ticket note logging.",
+    category: "HELPDESK" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.happyfox.com/",
+    docsUrl: "https://support.happyfox.com/kb/article/479-happyfox-api-documentation",
+    iconName: "happyfox",
+    prerequisites: [
+      "HappyFox account (Enterprise plan for API access)",
+      "API key and Auth Code from HappyFox admin",
+      "Your HappyFox subdomain",
+    ],
+    setupSteps: [
+      {
+        id: "domain",
+        title: "Enter Subdomain",
+        type: "credentials",
+        fields: [
+          { key: "subdomain", label: "Subdomain", type: "text", required: true, placeholder: "yourcompany" },
+        ],
+      },
+      {
+        id: "api-key",
+        title: "Get API Credentials",
+        type: "instruction",
+        content: "1. Log in to HappyFox as admin\n2. Go to **Manage > Integrations > API**\n3. Enable the API and copy the **API Key** and **Auth Code**",
+      },
+      {
+        id: "credentials",
+        title: "Enter Credentials",
+        type: "credentials",
+        fields: [
+          { key: "apiKey", label: "API Key", type: "text", required: true },
+          { key: "authCode", label: "Auth Code", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://yourcompany.happyfox.com/api/1.1/json",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Basic " },
+      },
+      contactSearch: {
+        endpoint: "/users",
+        method: "GET",
+        request: { queryParams: { q: "{{phone}}", page: "1", size: "5" } },
+        response: { resultsPath: "data", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        email: "email",
+        phone: "phones.0.number",
+      },
+      healthCheck: { endpoint: "/me", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── KAYAKO ────────────────
+  {
+    slug: "kayako",
+    name: "Kayako",
+    shortDesc: "Screen-pop and customer lookup with Kayako",
+    description: "Config-driven connector for Kayako with API key auth, user search, and conversation note logging.",
+    category: "HELPDESK" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://kayako.com/",
+    docsUrl: "https://developer.kayako.com/api/v1/reference",
+    iconName: "kayako",
+    prerequisites: [
+      "Kayako account with API access",
+      "Admin access to generate credentials",
+      "Your Kayako subdomain",
+    ],
+    setupSteps: [
+      {
+        id: "domain",
+        title: "Enter Subdomain",
+        type: "credentials",
+        fields: [
+          { key: "subdomain", label: "Subdomain", type: "text", required: true, placeholder: "yourcompany" },
+        ],
+      },
+      {
+        id: "credentials",
+        title: "Enter Credentials",
+        type: "credentials",
+        fields: [
+          { key: "email", label: "Admin Email", type: "text", required: true },
+          { key: "apiKey", label: "API Key / Password", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Customer Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://yourcompany.kayako.com/api/v1",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Basic " },
+      },
+      contactSearch: {
+        endpoint: "/users",
+        method: "GET",
+        request: { queryParams: { query: "{{phone}}", limit: "5" } },
+        response: { resultsPath: "data", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "full_name",
+        email: "emails.0.email",
+        phone: "phones.0.number",
+        company: "organization.name",
+      },
+      healthCheck: { endpoint: "/me", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── SAP SALES CLOUD ────────────────
+  {
+    slug: "sap-sales",
+    name: "SAP Sales Cloud",
+    shortDesc: "Screen-pop and contact lookup with SAP Sales Cloud",
+    description: "Config-driven connector for SAP Sales Cloud with OAuth2, OData contact search, and activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.sap.com/products/crm.html",
+    docsUrl: "https://help.sap.com/docs/SAP_SALES_CLOUD",
+    iconName: "sap",
+    prerequisites: [
+      "SAP Sales Cloud tenant",
+      "Admin access to register an OAuth2 client",
+      "Your SAP tenant URL",
+    ],
+    setupSteps: makeSetupSteps("sap-sales", {
+      portalName: "SAP OAuth2 Client",
+      portalUrl: "https://help.sap.com/",
+      portalInstructions: "1. Go to **Administrator > OAuth 2.0 Client Registration**\n2. Register a new client\n3. Set the **Redirect URI** to the value below\n4. Note the **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "tenantUrl", label: "Tenant URL", type: "url", required: true, placeholder: "https://myXXXXXX.crm.ondemand.com" },
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect SAP Sales",
+    }),
+    config: {
+      apiBaseUrl: "https://myXXXXXX.crm.ondemand.com/sap/c4c/odata/v1/c4codataapi",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://myXXXXXX.crm.ondemand.com/sap/bc/sec/oauth2/authorize",
+          tokenUrl: "https://myXXXXXX.crm.ondemand.com/sap/bc/sec/oauth2/token",
+          scopes: ["API_BUSINESS_PARTNER_0001"],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/ContactCollection",
+        method: "GET",
+        request: {
+          queryParams: {
+            "$filter": "substringof('{{phone}}',Phone) or substringof('{{phone}}',Mobile)",
+            "$select": "ContactID,FirstName,LastName,EMail,Phone,Mobile,AccountName,JobTitle",
+            "$top": "5",
+            "$format": "json",
+          },
+        },
+        response: { resultsPath: "d.results", idField: "ContactID" },
+      },
+      contactFieldMapping: {
+        displayName: "{{FirstName}} {{LastName}}",
+        email: "EMail",
+        phone: "Phone || Mobile",
+        company: "AccountName",
+        title: "JobTitle",
+      },
+      healthCheck: { endpoint: "/$metadata", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── ORACLE CX SALES ────────────────
+  {
+    slug: "oracle-cx",
+    name: "Oracle CX Sales",
+    shortDesc: "Screen-pop and contact lookup with Oracle CX Sales",
+    description: "Config-driven connector for Oracle CX Sales (formerly Oracle Sales Cloud) with OAuth2, contact search, and activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.oracle.com/cx/sales/",
+    docsUrl: "https://docs.oracle.com/en/cloud/saas/sales/faaps/",
+    iconName: "oracle",
+    prerequisites: [
+      "Oracle CX Sales instance",
+      "Admin access to register an OAuth application in Oracle IDCS",
+      "Your Oracle CX instance URL",
+    ],
+    setupSteps: makeSetupSteps("oracle-cx", {
+      portalName: "Oracle IDCS OAuth App",
+      portalUrl: "https://cloud.oracle.com/",
+      portalInstructions: "1. Go to **Identity Cloud Service (IDCS) > Applications**\n2. Create a **Confidential Application**\n3. Under **Client Configuration**, add the **Redirect URL** below\n4. Note the **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "instanceUrl", label: "CX Instance URL", type: "url", required: true, placeholder: "https://yourinstance.fs.us2.oraclecloud.com" },
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Oracle CX",
+    }),
+    config: {
+      apiBaseUrl: "https://yourinstance.fs.us2.oraclecloud.com/salesApi/resources",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://idcs-XXXXX.identity.oraclecloud.com/oauth2/v1/authorize",
+          tokenUrl: "https://idcs-XXXXX.identity.oraclecloud.com/oauth2/v1/token",
+          scopes: ["urn:opc:resource:consumer::all"],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/latest/contacts",
+        method: "GET",
+        request: {
+          queryParams: {
+            q: "WorkPhoneNumber LIKE '*{{phone}}*' OR MobilePhoneNumber LIKE '*{{phone}}*'",
+            limit: "5",
+            fields: "PartyId,ContactName,EmailAddress,WorkPhoneNumber,MobilePhoneNumber,AccountName,JobTitle",
+          },
+        },
+        response: { resultsPath: "items", idField: "PartyId" },
+      },
+      contactFieldMapping: {
+        displayName: "ContactName",
+        email: "EmailAddress",
+        phone: "WorkPhoneNumber || MobilePhoneNumber",
+        company: "AccountName",
+        title: "JobTitle",
+      },
+      healthCheck: { endpoint: "/latest/contacts?limit=1", method: "GET", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── ODOO CRM ────────────────
+  {
+    slug: "odoo",
+    name: "Odoo CRM",
+    shortDesc: "Screen-pop and contact lookup with Odoo CRM",
+    description: "Config-driven connector for Odoo CRM with API key auth (JSON-RPC), partner search, and phone call logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "api_key",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.odoo.com/",
+    docsUrl: "https://www.odoo.com/documentation/17.0/developer/reference/external_api.html",
+    iconName: "odoo",
+    prerequisites: [
+      "Odoo instance (Community or Enterprise, v14+)",
+      "User with API access",
+      "Your Odoo instance URL and database name",
+    ],
+    setupSteps: [
+      {
+        id: "instance",
+        title: "Enter Instance Details",
+        type: "credentials",
+        fields: [
+          { key: "instanceUrl", label: "Odoo URL", type: "url", required: true, placeholder: "https://yourcompany.odoo.com" },
+          { key: "database", label: "Database Name", type: "text", required: true, placeholder: "yourcompany" },
+        ],
+      },
+      {
+        id: "api-key",
+        title: "Get API Key",
+        type: "instruction",
+        content: "1. Log in to Odoo\n2. Go to **Settings > Users > Your User > Preferences**\n3. Under **Account Security**, click **New API Key**\n4. Enter a description and copy the key",
+      },
+      {
+        id: "credentials",
+        title: "Enter API Key",
+        type: "credentials",
+        fields: [
+          { key: "login", label: "Login (email)", type: "text", required: true },
+          { key: "apiKey", label: "API Key", type: "secret", required: true },
+        ],
+      },
+      { id: "test-search", title: "Test Contact Search", type: "test", testId: "contact_search" },
+      { id: "activate", title: "Activate", type: "activate" },
+    ],
+    config: {
+      apiBaseUrl: "https://yourcompany.odoo.com",
+      auth: {
+        type: "api_key",
+        apiKey: { headerName: "Authorization", prefix: "Basic " },
+      },
+      contactSearch: {
+        endpoint: "/api/v1/search_read",
+        method: "POST",
+        request: {
+          bodyTemplate: JSON.stringify({
+            model: "res.partner",
+            domain: ["|", ["phone", "ilike", "{{phone}}"], ["mobile", "ilike", "{{phone}}"]],
+            fields: ["id", "name", "email", "phone", "mobile", "company_name", "function"],
+            limit: 5,
+          }),
+        },
+        response: { resultsPath: "result", idField: "id" },
+      },
+      contactFieldMapping: {
+        displayName: "name",
+        email: "email",
+        phone: "phone || mobile",
+        company: "company_name",
+        title: "function",
+      },
+      crmLink: {
+        urlTemplate: "https://yourcompany.odoo.com/web#id={{recordId}}&model=res.partner&view_type=form",
+      },
+      healthCheck: { endpoint: "/web/session/get_session_info", method: "POST", expectedStatus: 200 },
+    },
+  },
+
+  // ──────────────── CREATIO ────────────────
+  {
+    slug: "creatio",
+    name: "Creatio",
+    shortDesc: "Screen-pop and contact lookup with Creatio CRM",
+    description: "Config-driven connector for Creatio (formerly bpm'online) with OAuth2, OData contact search, and activity logging.",
+    category: "CRM" as const,
+    tier: "CONFIG_DRIVEN" as const,
+    authType: "oauth2",
+    status: "DRAFT" as const,
+    vendorUrl: "https://www.creatio.com/",
+    docsUrl: "https://academy.creatio.com/docs/developer/integrations/",
+    iconName: "creatio",
+    prerequisites: [
+      "Creatio instance (Sales, Service, or Marketing edition)",
+      "Admin access to register an OAuth application",
+      "Your Creatio instance URL",
+    ],
+    setupSteps: makeSetupSteps("creatio", {
+      portalName: "Creatio OAuth App",
+      portalUrl: "https://academy.creatio.com/",
+      portalInstructions: "1. Log in to Creatio as admin\n2. Go to **System Designer > Integration with external services**\n3. Add a new OAuth 2.0 identity provider\n4. Set the **Redirect URI** to the value below\n5. Note the **Client ID** and **Client Secret**",
+      credentialFields: [
+        { key: "instanceUrl", label: "Creatio URL", type: "url", required: true, placeholder: "https://yourcompany.creatio.com" },
+        { key: "clientId", label: "Client ID", type: "text", required: true },
+        { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
+      ],
+      oauthButtonLabel: "Connect Creatio",
+    }),
+    config: {
+      apiBaseUrl: "https://yourcompany.creatio.com/0/odata",
+      auth: {
+        type: "oauth2",
+        oauth2: {
+          authorizeUrl: "https://yourcompany.creatio.com/0/ServiceModel/AuthService.svc/Login",
+          tokenUrl: "https://yourcompany.creatio.com/connect/token",
+          scopes: [],
+          tokenPlacement: "header",
+          tokenPrefix: "Bearer",
+        },
+      },
+      contactSearch: {
+        endpoint: "/Contact",
+        method: "GET",
+        request: {
+          queryParams: {
+            "$filter": "contains(Phone,'{{phone}}') or contains(MobilePhone,'{{phone}}')",
+            "$select": "Id,Name,Email,Phone,MobilePhone,Account/Name,JobTitle",
+            "$expand": "Account($select=Name)",
+            "$top": "5",
+          },
+        },
+        response: { resultsPath: "value", idField: "Id" },
+      },
+      contactFieldMapping: {
+        displayName: "Name",
+        email: "Email",
+        phone: "Phone || MobilePhone",
+        company: "Account.Name",
+        title: "JobTitle",
+      },
+      crmLink: {
+        urlTemplate: "https://yourcompany.creatio.com/Nui/ViewModule.aspx#CardModuleV2/ContactPageV2/edit/{{recordId}}",
+      },
+      healthCheck: { endpoint: "/Contact?$top=1", method: "GET", expectedStatus: 200 },
+    },
+  },
 ];
 
 // ---------- main ----------
@@ -792,42 +2084,7 @@ async function main() {
     }
   }
 
-  console.log("\nDone. Seeded", connectors.length, "connector definitions.");
-
-  
-  // Generated from blueprint: salesforce-crm
-  await prisma.connectorDefinition.upsert({
-    where: { slug: "salesforce-crm" },
-    update: {
-      name: "Salesforce CRM",
-      shortDesc: "Contact search, activity logging, and deal sync with Salesforce CRM",
-      category: "CRM",
-      tier: "CONFIG_DRIVEN",
-      authType: "oauth2",
-      vendorUrl: "https://www.salesforce.com/",
-      docsUrl: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest.htm",
-      prerequisites: ["Salesforce Enterprise Edition or higher","Connected App configured with OAuth2","API access enabled for user"],
-    },
-    create: {
-      slug: "salesforce-crm",
-      name: "Salesforce CRM",
-      description: "Contact search, activity logging, and deal sync with Salesforce CRM",
-      shortDesc: "Contact search, activity logging, and deal sync with Salesforce CRM",
-      status: "DRAFT",
-      version: 1,
-      config: {},
-      category: "CRM",
-      tier: "CONFIG_DRIVEN",
-      authType: "oauth2",
-      vendorUrl: "https://www.salesforce.com/",
-      docsUrl: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest.htm",
-      prerequisites: ["Salesforce Enterprise Edition or higher","Connected App configured with OAuth2","API access enabled for user"],
-      setupSteps: [],
-    },
-  });
-  console.log("  Upserted salesforce-crm");
-
-  // --- END GENERATED CONNECTORS ---
+  console.log(`\nDone. Seeded ${connectors.length} connector definitions.`);
 }
 
 main()
