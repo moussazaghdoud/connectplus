@@ -12,12 +12,13 @@ import type {
   ConnectorEventType,
   HealthStatus,
 } from "../../core/connector-interface";
-import type { CanonicalContact, ContactSearchQuery, ExternalContact } from "../../core/models/contact";
+import type { CanonicalContact, ContactSearchQuery, ExternalContact, PhoneEntry } from "../../core/models/contact";
 import type { Interaction } from "../../../prisma-types";
 import type { ConnectorDefinitionConfig } from "./types";
 import { buildAuthHeaders, buildOAuth2AuthUrl, exchangeOAuth2Token, refreshOAuth2Token } from "./auth-handler";
 import { verifyWebhookSignature } from "./webhook-verifier";
 import { getByPath, resolveField, applyTemplate, mapContactFields } from "./field-mapper";
+
 import { validateUrl, resolveEndpoint } from "./url-validator";
 import { fetchWithRetry } from "../../utils/http";
 import { encryptJson } from "../../utils/crypto";
@@ -296,10 +297,25 @@ export class RestCrmConnector implements ConnectorInterface {
     const mapping = strategy?.fieldMapping ?? this.def.contactFieldMapping;
     const mapped = mapContactFields(raw, mapping as unknown as Record<string, string | undefined>);
 
+    // Extract all phone numbers if phoneFields is configured
+    const phoneFieldsConfig = (strategy?.fieldMapping ?? this.def.contactFieldMapping)?.phoneFields;
+    const phones: PhoneEntry[] = [];
+    if (phoneFieldsConfig) {
+      for (const [label, path] of Object.entries(phoneFieldsConfig)) {
+        const val = resolveField(raw, path);
+        if (val) phones.push({ label, number: val });
+      }
+    }
+    // If no phoneFields config, use the primary phone with a default label
+    if (phones.length === 0 && mapped.phone) {
+      phones.push({ label: "Phone", number: mapped.phone });
+    }
+
     const contact: CanonicalContact = {
       displayName: mapped.displayName || `Contact ${externalContact.externalId}`,
       email: mapped.email || undefined,
       phone: mapped.phone || undefined,
+      phones: phones.length > 0 ? phones : undefined,
       company: mapped.company || undefined,
       title: mapped.title || undefined,
       avatarUrl: mapped.avatarUrl || undefined,

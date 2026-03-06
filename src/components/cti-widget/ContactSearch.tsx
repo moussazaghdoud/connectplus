@@ -2,10 +2,16 @@
 
 import { useState, useCallback } from "react";
 
+interface PhoneEntry {
+  label: string;
+  number: string;
+}
+
 interface ContactResult {
   displayName: string;
   email?: string;
   phone?: string;
+  phones?: PhoneEntry[];
   company?: string;
   externalId: string;
   source: string;
@@ -114,24 +120,37 @@ export function ContactSearch({ onClickToCall }: Props) {
                 {contact.email && (
                   <span className="text-xs text-gray-400 truncate">{contact.email}</span>
                 )}
-                {contact.phone && (
-                  <span className="text-xs text-gray-500 font-mono">{contact.phone}</span>
-                )}
               </div>
-            </div>
 
-            {/* Click-to-call */}
-            {contact.phone ? (
-              <button
-                onClick={() => onClickToCall(contact.phone!)}
-                className="w-9 h-9 rounded-full bg-green-50 hover:bg-green-100 text-green-600 flex items-center justify-center text-base shrink-0 ml-2 transition-colors"
-                title={`Call ${contact.phone}`}
-              >
-                &#128222;
-              </button>
-            ) : (
-              <span className="text-xs text-gray-300 ml-2 shrink-0">No phone</span>
-            )}
+              {/* All phone numbers with individual call buttons */}
+              {(() => {
+                const phones = contact.phones?.length
+                  ? contact.phones
+                  : contact.phone
+                    ? [{ label: "Phone", number: contact.phone }]
+                    : [];
+                if (phones.length === 0) return (
+                  <span className="text-xs text-gray-300 mt-1">No phone</span>
+                );
+                return (
+                  <div className="flex flex-col gap-1 mt-1">
+                    {phones.map((p) => (
+                      <div key={`${p.label}:${p.number}`} className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-400 w-10 shrink-0">{p.label}</span>
+                        <span className="text-xs text-gray-600 font-mono flex-1 truncate">{p.number}</span>
+                        <button
+                          onClick={() => onClickToCall(p.number)}
+                          className="w-7 h-7 rounded-full bg-green-50 hover:bg-green-100 text-green-600 flex items-center justify-center text-sm shrink-0 transition-colors"
+                          title={`Call ${p.label}: ${p.number}`}
+                        >
+                          &#128222;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         ))}
       </div>

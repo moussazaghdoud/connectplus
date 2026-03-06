@@ -98,6 +98,8 @@ export interface ContactFieldMappingConfig {
   displayName: string;
   email?: string;
   phone?: string;
+  /** All phone fields as { label: dotPath } pairs, e.g. { "Work": "Phone", "Mobile": "Mobile" } */
+  phoneFields?: Record<string, string>;
   company?: string;
   title?: string;
   avatarUrl?: string;

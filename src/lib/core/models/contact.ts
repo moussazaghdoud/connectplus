@@ -1,10 +1,18 @@
 import { z } from "zod";
 
+/** A labeled phone number */
+export interface PhoneEntry {
+  label: string;
+  number: string;
+}
+
 /** Canonical contact model — connector-agnostic */
 export interface CanonicalContact {
   displayName: string;
   email?: string;
   phone?: string;
+  /** All phone numbers (label + number). Populated by connectors that expose multiple phones. */
+  phones?: PhoneEntry[];
   company?: string;
   title?: string;
   externalId: string;

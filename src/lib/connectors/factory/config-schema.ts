@@ -61,6 +61,7 @@ const contactFieldMappingSchema = z.object({
   displayName: z.string().min(1),
   email: z.string().optional(),
   phone: z.string().optional(),
+  phoneFields: z.record(z.string(), z.string()).optional(),
   company: z.string().optional(),
   title: z.string().optional(),
   avatarUrl: z.string().optional(),
