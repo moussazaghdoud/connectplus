@@ -56,6 +56,19 @@ export class RestCrmConnector implements ConnectorInterface {
     this.config = config;
   }
 
+  /**
+   * Resolve apiBaseUrl — supports {{instanceUrl}}, {{subdomain}}, {{orgUrl}} placeholders
+   * so connectors like Salesforce/Dynamics can use per-tenant instance URLs.
+   */
+  private resolveBaseUrl(): string {
+    const creds = this.config?.credentials ?? {};
+    return applyTemplate(this.def.apiBaseUrl, {
+      instanceUrl: (creds.instanceUrl ?? "").replace(/\/+$/, ""),
+      orgUrl: (creds.orgUrl ?? "").replace(/\/+$/, ""),
+      subdomain: creds.subdomain ?? "",
+    });
+  }
+
   // ── OAuth2 ─────────────────────────────────────────────
 
   getAuthUrl(tenantId: string, redirectUri: string): string {
@@ -213,7 +226,7 @@ export class RestCrmConnector implements ConnectorInterface {
       "Content-Type": "application/json",
     };
 
-    const url = resolveEndpoint(this.def.apiBaseUrl, searchConf.endpoint);
+    const url = resolveEndpoint(this.resolveBaseUrl(), searchConf.endpoint);
 
     const validation = validateUrl(url);
     if (!validation.valid) {
@@ -360,7 +373,7 @@ export class RestCrmConnector implements ConnectorInterface {
     };
 
     const wb = this.def.writeBack;
-    const url = resolveEndpoint(this.def.apiBaseUrl, wb.endpoint);
+    const url = resolveEndpoint(this.resolveBaseUrl(), wb.endpoint);
     const body = applyTemplate(wb.bodyTemplate, { interaction: interaction as unknown as Record<string, unknown> });
 
     const resp = await fetchWithRetry(url, {
@@ -379,7 +392,7 @@ export class RestCrmConnector implements ConnectorInterface {
       const respData = await resp.json().catch(() => ({}));
       const writeBackId = (respData as Record<string, unknown>).id ?? "";
       const assocUrl = resolveEndpoint(
-        this.def.apiBaseUrl,
+        this.resolveBaseUrl(),
         applyTemplate(wb.associateContact.endpoint, {
           writeBackId: String(writeBackId),
           externalId: interaction.externalId,
@@ -404,7 +417,7 @@ export class RestCrmConnector implements ConnectorInterface {
 
   async healthCheck(config: TenantConnectorConfig): Promise<HealthStatus> {
     const hc = this.def.healthCheck ?? { endpoint: "/", method: "GET" as const };
-    const url = resolveEndpoint(this.def.apiBaseUrl, hc.endpoint);
+    const url = resolveEndpoint(this.resolveBaseUrl(), hc.endpoint);
     const headers = buildAuthHeaders(this.def.auth, config.credentials);
     const expectedStatus = hc.expectedStatus ?? 200;
     const start = Date.now();

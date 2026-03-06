@@ -287,7 +287,7 @@ const connectors = [
       oauthButtonLabel: "Connect Salesforce",
     }),
     config: {
-      apiBaseUrl: "https://yourcompany.my.salesforce.com/services/data/v59.0",
+      apiBaseUrl: "{{instanceUrl}}/services/data/v59.0",
       auth: {
         type: "oauth2",
         oauth2: {
@@ -310,6 +310,9 @@ const connectors = [
         phone: "Phone",
         company: "Account.Name",
         title: "Title",
+      },
+      crmLink: {
+        urlTemplate: "{{instanceUrl}}/{{recordId}}",
       },
       writeBack: {
         endpoint: "/sobjects/Task",
@@ -358,7 +361,7 @@ const connectors = [
       oauthButtonLabel: "Connect Dynamics 365",
     }),
     config: {
-      apiBaseUrl: "https://yourorg.crm.dynamics.com/api/data/v9.2",
+      apiBaseUrl: "{{orgUrl}}/api/data/v9.2",
       auth: {
         type: "oauth2",
         oauth2: {

@@ -82,7 +82,7 @@ class InboundCallHandler {
     callId: string,
     state: "ringing" | "connected" | "ended",
     callerNumber: string
-  ): Promise<void> {
+  ): Promise<import("../cti/types/call-event").CtiCallEvent | null> {
     try {
       const raw: RawTelephonyEvent = {
         callId,
@@ -94,10 +94,12 @@ class InboundCallHandler {
         agentId: "*",
         tenantId,
       };
-      await processEvent(raw);
+      const event = await processEvent(raw);
       logger.debug({ tenantId, callId, state }, "Rainbow event forwarded to CTI bridge");
+      return event;
     } catch (err) {
       logger.warn({ err, tenantId, callId, state }, "Failed to forward Rainbow event to CTI bridge");
+      return null;
     }
   }
 
@@ -119,23 +121,37 @@ class InboundCallHandler {
 
     const normalized = normalizePhone(callerNumber);
 
-    // Forward to CTI bridge for /cti-widget subscribers
-    await this.forwardToCti(tenantId, callId ?? "unknown", "ringing", normalized);
     logger.info(
       { tenantId, callId, rawCallerNumber: callerNumber, normalizedPhone: normalized },
-      "[InboundCall] handleRinging: resolving contact"
+      "[InboundCall] handleRinging: forwarding to CTI bridge for CRM resolution"
     );
 
-    // Resolve caller via CrmService (single entry point for all CRM operations)
+    // Forward to CTI bridge — it handles CRM resolution, screen pop to CTI widgets,
+    // and call logging. We reuse its CRM context to avoid a duplicate lookup.
+    const ctiEvent = await this.forwardToCti(tenantId, callId ?? "unknown", "ringing", normalized);
+
+    // Extract CRM context from CTI processor result (single lookup, no duplication)
     let contact: Awaited<ReturnType<typeof crmService.resolveCallerByPhone>> = null;
-    try {
-      contact = await crmService.resolveCallerByPhone(tenantId, normalized);
+    if (ctiEvent?.crmContext) {
+      contact = {
+        id: ctiEvent.crmContext.recordId ?? "",
+        displayName: ctiEvent.crmContext.displayName ?? "Unknown",
+        email: null,
+        phone: normalized,
+        company: ctiEvent.crmContext.company ?? null,
+        avatarUrl: null,
+        crmModule: ctiEvent.crmContext.module,
+        crmRecordId: ctiEvent.crmContext.recordId,
+      };
       logger.info(
-        { tenantId, callId, contactFound: !!contact, contactName: contact?.displayName ?? null },
-        "[InboundCall] Contact resolution result"
+        { tenantId, callId, contactFound: true, contactName: contact.displayName },
+        "[InboundCall] Contact resolved via CTI bridge"
       );
-    } catch (err) {
-      logger.error({ err, tenantId, callId, normalizedPhone: normalized }, "[InboundCall] Contact resolution FAILED");
+    } else {
+      logger.info(
+        { tenantId, callId, contactFound: false },
+        "[InboundCall] No CRM contact found"
+      );
     }
 
     // Broadcast screen pop immediately (don't wait for DB interaction creation)
