@@ -48,7 +48,8 @@ export const POST = apiHandler(
     metrics.increment("rainbow_callback", { eventType });
 
     // Emit to event bus for processing (with tenantId for inbound routing)
-    eventBus.emit("rainbow.callback", {
+    eventBus.emit("pbx.callback", {
+      vendor: "rainbow",
       eventType,
       tenantId,
       payload: body,

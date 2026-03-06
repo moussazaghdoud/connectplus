@@ -21,7 +21,7 @@ class InboundCallHandler {
   initialize(): void {
     if (this.initialized) return;
 
-    eventBus.on("rainbow.callback", async (event) => {
+    eventBus.on("pbx.callback", async (event) => {
       try {
         await this.handleCallback(event);
       } catch (err) {
@@ -34,6 +34,7 @@ class InboundCallHandler {
   }
 
   private async handleCallback(event: {
+    vendor?: string;
     eventType: string;
     tenantId: string;
     payload: unknown;
@@ -255,6 +256,7 @@ class InboundCallHandler {
       tenantId,
       interactionId: interaction.id,
       status: newStatus,
+      pbxCallId: callId,
       rainbowCallId: callId,
     });
   }

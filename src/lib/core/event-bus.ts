@@ -25,12 +25,17 @@ export interface FrameworkEvents {
     event: ConnectorEvent;
   };
   "connector.health": { connectorId: string; status: HealthStatus };
+  /** Generic PBX callback — works with Rainbow, RingCentral, Asterisk, etc. */
+  "pbx.callback": { vendor: string; eventType: string; tenantId: string; payload: unknown };
+  /** @deprecated Use "pbx.callback" — kept for backward compatibility */
   "rainbow.callback": { eventType: string; tenantId: string; payload: unknown };
   "screen.pop": { tenantId: string; data: ScreenPopData };
   "call.status_changed": {
     tenantId: string;
     interactionId: string;
     status: string;
+    pbxCallId?: string;
+    /** @deprecated Use pbxCallId */
     rainbowCallId?: string;
   };
 }
