@@ -374,6 +374,12 @@ export class RestCrmConnector implements ConnectorInterface {
 
     const wb = this.def.writeBack;
     const url = resolveEndpoint(this.resolveBaseUrl(), wb.endpoint);
+
+    const wbValidation = validateUrl(url);
+    if (!wbValidation.valid) {
+      throw new Error(`Write-back URL validation failed: ${wbValidation.error}`);
+    }
+
     const body = applyTemplate(wb.bodyTemplate, { interaction: interaction as unknown as Record<string, unknown> });
 
     const resp = await fetchWithRetry(url, {
@@ -398,6 +404,10 @@ export class RestCrmConnector implements ConnectorInterface {
           externalId: interaction.externalId,
         })
       );
+      const assocValidation = validateUrl(assocUrl);
+      if (!assocValidation.valid) {
+        throw new Error(`Association URL validation failed: ${assocValidation.error}`);
+      }
       const assocBody = wb.associateContact.bodyTemplate
         ? applyTemplate(wb.associateContact.bodyTemplate, {
             writeBackId: String(writeBackId),
@@ -418,6 +428,10 @@ export class RestCrmConnector implements ConnectorInterface {
   async healthCheck(config: TenantConnectorConfig): Promise<HealthStatus> {
     const hc = this.def.healthCheck ?? { endpoint: "/", method: "GET" as const };
     const url = resolveEndpoint(this.resolveBaseUrl(), hc.endpoint);
+    const hcValidation = validateUrl(url);
+    if (!hcValidation.valid) {
+      return { healthy: false, latencyMs: 0, message: `URL validation failed: ${hcValidation.error}` };
+    }
     const headers = buildAuthHeaders(this.def.auth, config.credentials);
     const expectedStatus = hc.expectedStatus ?? 200;
     const start = Date.now();

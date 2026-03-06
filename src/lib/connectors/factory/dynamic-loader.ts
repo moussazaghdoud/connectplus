@@ -80,23 +80,25 @@ class DynamicConnectorLoader {
    */
   async reload(slug: string): Promise<boolean> {
     try {
-      // Unregister existing (if any)
-      if (connectorRegistry.has(slug)) {
-        connectorRegistry.unregister(slug);
-      }
+      // Save existing connector so we can rollback if new config fails
+      const previous = connectorRegistry.tryGet(slug) ?? null;
 
       const def = await prisma.connectorDefinition.findUnique({
         where: { slug },
       });
 
       if (!def || def.status !== "ACTIVE") {
+        // Intentional removal — unregister only when definition is explicitly inactive
+        if (connectorRegistry.has(slug)) {
+          connectorRegistry.unregister(slug);
+        }
         logger.info({ slug }, "Connector definition not active, unregistered");
         return false;
       }
 
       const parseResult = connectorDefinitionConfigSchema.safeParse(def.config);
       if (!parseResult.success) {
-        logger.error({ slug, errors: parseResult.error.issues }, "Invalid config on reload");
+        logger.error({ slug, errors: parseResult.error.issues }, "Invalid config on reload — keeping previous version");
         return false;
       }
 
@@ -108,6 +110,10 @@ class DynamicConnectorLoader {
         config
       );
 
+      // Only unregister after new connector is built successfully
+      if (connectorRegistry.has(slug)) {
+        connectorRegistry.unregister(slug);
+      }
       connectorRegistry.register(connector);
       logger.info({ slug }, "Dynamic connector hot-reloaded");
       return true;

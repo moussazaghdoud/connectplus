@@ -2,11 +2,13 @@ import { prisma } from "../db";
 import { connectorRegistry } from "./connector-registry";
 import { getTenantContext } from "./tenant-context";
 import { decryptJson } from "../utils/crypto";
+import { crmService } from "../crm/service";
 import type { CanonicalContact, ContactSearchQuery } from "./models/contact";
 import { logger } from "../observability/logger";
 
 /**
  * Contact Resolver — finds and caches contacts from external systems.
+ * Delegates CRM connector searches to CrmService to avoid logic duplication.
  * Searches local cache first, then falls back to connector APIs.
  */
 export class ContactResolver {
@@ -19,94 +21,98 @@ export class ContactResolver {
     const localContacts = await this.searchLocal(query);
     results.push(...localContacts);
 
-    // 2. If specific connector requested, search it
-    if (query.connectorId) {
-      let connector = connectorRegistry.tryGet(query.connectorId);
-      logger.info(
-        { connectorId: query.connectorId, inRegistry: !!connector, registryIds: connectorRegistry.listIds() },
-        "Contact search: connector lookup"
-      );
-      if (!connector) {
-        // Try loading dynamic connector from DB definition
-        try {
-          const { dynamicLoader } = await import("../connectors/factory/dynamic-loader");
-          const loaded = await dynamicLoader.reload(query.connectorId);
-          connector = connectorRegistry.tryGet(query.connectorId);
-          logger.info(
-            { connectorId: query.connectorId, loaded, inRegistry: !!connector },
-            "Contact search: dynamic load attempt"
-          );
-        } catch (loadErr) {
-          logger.warn({ connectorId: query.connectorId, err: loadErr }, "Contact search: dynamic load failed");
-        }
-      }
-      if (connector) {
-        try {
-          // Initialize connector with tenant credentials
-          const config = await prisma.connectorConfig.findUnique({
-            where: {
-              tenantId_connectorId: { tenantId, connectorId: query.connectorId! },
-            },
-          });
-          logger.info(
-            { connectorId: query.connectorId, hasConfig: !!config, configId: config?.id },
-            "Contact search: connector config lookup"
-          );
-          if (config) {
-            const credentials = decryptJson<Record<string, string>>(config.credentials);
-            logger.info(
-              {
-                connectorId: query.connectorId,
-                hasAccessToken: !!credentials.accessToken,
-                hasRefreshToken: !!credentials.refreshToken,
-                tokenExpiresAt: credentials.tokenExpiresAt,
-              },
-              "Contact search: credentials decrypted"
-            );
-            await connector.initialize({
-              tenantId,
-              connectorId: query.connectorId!,
-              credentials,
-              settings: config.settings as Record<string, unknown>,
-              enabled: config.enabled,
-            });
-          } else {
-            logger.warn(
-              { connectorId: query.connectorId, tenantId },
-              "Contact search: no connector config found — connector not configured for this tenant"
-            );
+    // 2. If phone search, delegate to CrmService (single code path for phone resolution)
+    if (query.phone && !query.connectorId) {
+      try {
+        const match = await crmService.resolveCallerByPhone(tenantId, query.phone);
+        if (match) {
+          const canonical: CanonicalContact = {
+            displayName: match.displayName,
+            email: match.email ?? undefined,
+            phone: match.phone ?? undefined,
+            company: match.company ?? undefined,
+            title: match.title ?? undefined,
+            avatarUrl: match.avatarUrl ?? undefined,
+            externalId: match.crmRecordId ?? match.id,
+            source: match.connectorSlug ?? "crm",
+            metadata: { crmUrl: match.crmUrl, crmModule: match.crmModule },
+          };
+          if (!results.find((r) => r.externalId === canonical.externalId && r.source === canonical.source)) {
+            results.push(canonical);
           }
+        }
+      } catch (err) {
+        logger.warn({ err, tenantId }, "CrmService phone resolution failed in ContactResolver");
+      }
+      return results.slice(0, query.limit ?? 20);
+    }
 
-          const externals = await connector.searchContacts({
-            ...query,
-            tenantId,
-          });
-          logger.info(
-            { connectorId: query.connectorId, resultCount: externals.length },
-            "Contact search: external results"
-          );
-          for (const ext of externals) {
-            const mapped = connector.mapContact(ext);
-            // Deduplicate against local results
-            if (!results.find((r) => r.externalId === mapped.externalId && r.source === mapped.source)) {
-              results.push(mapped);
-            }
-          }
-        } catch (err) {
-          logger.warn(
-            { connectorId: query.connectorId, err },
-            "Connector search failed, returning local results only"
-          );
-        }
-      } else {
-        logger.warn(
-          { connectorId: query.connectorId },
-          "Contact search: connector not found in registry even after dynamic load"
-        );
-      }
+    // 3. If specific connector requested, search it directly
+    if (query.connectorId) {
+      await this.searchConnector(query, tenantId, results);
     }
 
     return results.slice(0, query.limit ?? 20);
+  }
+
+  /** Search a specific connector by ID */
+  private async searchConnector(
+    query: ContactSearchQuery,
+    tenantId: string,
+    results: CanonicalContact[]
+  ): Promise<void> {
+    let connector = connectorRegistry.tryGet(query.connectorId!);
+    if (!connector) {
+      try {
+        const { dynamicLoader } = await import("../connectors/factory/dynamic-loader");
+        await dynamicLoader.reload(query.connectorId!);
+        connector = connectorRegistry.tryGet(query.connectorId!);
+      } catch (loadErr) {
+        logger.warn({ connectorId: query.connectorId, err: loadErr }, "Contact search: dynamic load failed");
+      }
+    }
+
+    if (!connector) {
+      logger.warn({ connectorId: query.connectorId }, "Contact search: connector not found");
+      return;
+    }
+
+    try {
+      const config = await prisma.connectorConfig.findUnique({
+        where: {
+          tenantId_connectorId: { tenantId, connectorId: query.connectorId! },
+        },
+      });
+
+      if (config) {
+        const credentials = decryptJson<Record<string, string>>(config.credentials);
+        await connector.initialize({
+          tenantId,
+          connectorId: query.connectorId!,
+          credentials,
+          settings: config.settings as Record<string, unknown>,
+          enabled: config.enabled,
+        });
+      } else {
+        logger.warn(
+          { connectorId: query.connectorId, tenantId },
+          "Contact search: no connector config found"
+        );
+      }
+
+      const externals = await connector.searchContacts({ ...query, tenantId });
+      for (const ext of externals) {
+        const mapped = connector.mapContact(ext);
+        if (!results.find((r) => r.externalId === mapped.externalId && r.source === mapped.source)) {
+          results.push(mapped);
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        { connectorId: query.connectorId, err },
+        "Connector search failed, returning local results only"
+      );
+    }
   }
 
   /** Search local DB contacts */

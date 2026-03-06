@@ -12,7 +12,7 @@
 import { connectorRegistry } from "../core/connector-registry";
 import { prisma } from "../db";
 import { decryptJson } from "../utils/crypto";
-import { normalizePhone, phoneMatch } from "../utils/phone";
+import { normalizePhone } from "../utils/phone";
 import { logger } from "../observability/logger";
 import { metrics } from "../observability/metrics";
 import type { CanonicalContact } from "../core/models/contact";
@@ -112,15 +112,16 @@ class CrmService {
       return this.contactToMatch(exactMatch);
     }
 
-    // 3. Fallback: local DB (fuzzy match by trailing digits)
-    const candidates = await prisma.contact.findMany({
-      where: { tenantId, phone: { not: null } },
-      take: 500,
-    });
-    for (const c of candidates) {
-      if (c.phone && phoneMatch(normalized, c.phone)) {
-        log.info({ tenantId, phone: normalized, name: c.displayName }, "Fallback: fuzzy match in local DB");
-        return this.contactToMatch(c);
+    // 3. Fallback: local DB (fuzzy match by trailing 9 digits)
+    const digits = normalized.replace(/^\+/, "");
+    const tail = digits.slice(-9);
+    if (tail.length >= 9) {
+      const fuzzyMatch = await prisma.contact.findFirst({
+        where: { tenantId, phone: { endsWith: tail } },
+      });
+      if (fuzzyMatch) {
+        log.info({ tenantId, phone: normalized, name: fuzzyMatch.displayName }, "Fallback: fuzzy match in local DB");
+        return this.contactToMatch(fuzzyMatch);
       }
     }
 
