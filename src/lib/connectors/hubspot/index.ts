@@ -24,6 +24,8 @@ import type {
 } from "@/lib/core/models/contact";
 import type { Interaction } from "@/prisma-types";
 import { fetchWithRetry } from "@/lib/utils/http";
+import { encryptJson } from "@/lib/utils/crypto";
+import { prisma } from "@/lib/db";
 import { logger } from "@/lib/observability/logger";
 import { metrics } from "@/lib/observability/metrics";
 
@@ -263,10 +265,14 @@ export class HubSpotConnector implements ConnectorInterface {
   private async getAccessToken(): Promise<string | null> {
     if (!this.config) return null;
 
-    const { accessToken, refreshToken, clientId, clientSecret, redirectUri } =
-      this.config.credentials;
+    const creds = this.config.credentials;
+    const { accessToken, refreshToken, clientId, clientSecret, redirectUri } = creds;
 
-    if (accessToken) return accessToken;
+    // Check if token is still valid (with 60s safety margin)
+    const expiresAt = creds.tokenExpiresAt ? new Date(creds.tokenExpiresAt) : null;
+    const isExpired = !accessToken || (expiresAt && expiresAt.getTime() - 60000 < Date.now());
+
+    if (!isExpired && accessToken) return accessToken;
 
     // Try to refresh
     if (refreshToken && clientId && clientSecret && redirectUri) {
@@ -277,7 +283,31 @@ export class HubSpotConnector implements ConnectorInterface {
           redirectUri,
           refreshToken
         );
-        // Note: in production, store the new tokens back to the DB
+
+        // Update in-memory credentials
+        this.config.credentials = {
+          ...creds,
+          accessToken: result.access_token,
+          refreshToken: result.refresh_token || refreshToken,
+          tokenExpiresAt: new Date(Date.now() + result.expires_in * 1000).toISOString(),
+        };
+
+        // Persist to DB
+        try {
+          await prisma.connectorConfig.updateMany({
+            where: {
+              tenantId: this.config.tenantId,
+              connectorId: this.manifest.id,
+            },
+            data: {
+              credentials: encryptJson(this.config.credentials),
+            },
+          });
+          logger.info("HubSpot OAuth token refreshed and saved to DB");
+        } catch (dbErr) {
+          logger.warn({ err: dbErr }, "HubSpot token refreshed but DB save failed");
+        }
+
         return result.access_token;
       } catch (err) {
         logger.error({ err }, "Failed to refresh HubSpot token");

@@ -146,8 +146,9 @@ class CrmService {
 
     for (const config of configs) {
       const connector = await this.getConnector(config.connectorId);
-      if (!connector?.writeBack) continue;
+      if (!connector) continue;
       if (!connector.manifest.capabilities.includes("interaction_writeback")) continue;
+      if (!connector.writeBack) continue;
 
       const slug = config.connectorId;
       metrics.increment("crm_writeback_attempt", { connector: slug });
@@ -248,6 +249,7 @@ class CrmService {
 
       const connector = await this.getConnector(slug);
       if (!connector) continue;
+      if (!connector.manifest.capabilities.includes("contact_search")) continue;
 
       try {
         const credentials = decryptJson<Record<string, string>>(config.credentials);
