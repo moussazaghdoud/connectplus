@@ -140,8 +140,8 @@ const connectors = [
     ],
     setupSteps: makeSetupSteps("zoho-crm", {
       portalName: "Zoho API Console App",
-      portalUrl: "https://api-console.zoho.eu/",
-      portalInstructions: "1. Go to [Zoho API Console](https://api-console.zoho.eu/)\n2. Click **Add Client** > **Server-based Applications**\n3. Set the **Authorized Redirect URI** to the value below",
+      portalUrl: "https://api-console.zoho.com/",
+      portalInstructions: "1. Go to [Zoho API Console](https://api-console.zoho.com/)\n2. Click **Add Client** > **Server-based Applications**\n3. Set the **Authorized Redirect URI** to the value below",
       credentialFields: [
         { key: "clientId", label: "Client ID", type: "text", required: true },
         { key: "clientSecret", label: "Client Secret", type: "secret", required: true },
@@ -157,12 +157,12 @@ const connectors = [
     }),
     // Config will be preserved if row exists; this is the fallback for fresh installs
     config: {
-      apiBaseUrl: "https://www.zohoapis.eu/crm/v2",
+      apiBaseUrl: "https://www.zohoapis.com/crm/v2",
       auth: {
         type: "oauth2",
         oauth2: {
-          authorizeUrl: "https://accounts.zoho.eu/oauth/v2/auth",
-          tokenUrl: "https://accounts.zoho.eu/oauth/v2/token",
+          authorizeUrl: "https://accounts.zoho.com/oauth/v2/auth",
+          tokenUrl: "https://accounts.zoho.com/oauth/v2/token",
           scopes: [
             "ZohoCRM.modules.contacts.READ",
             "ZohoCRM.modules.leads.READ",
@@ -238,7 +238,7 @@ const connectors = [
         title: "Title",
       },
       crmLink: {
-        urlTemplate: "https://crm.zoho.eu/crm/tab/{{module}}/{{recordId}}",
+        urlTemplate: "https://crm.zoho.com/crm/tab/{{module}}/{{recordId}}",
       },
       writeBack: {
         endpoint: "/Calls",
