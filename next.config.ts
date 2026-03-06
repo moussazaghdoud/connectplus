@@ -4,9 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["rainbow-node-sdk"],
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "logo.clearbit.com" },
-    ],
+    remotePatterns: [],
   },
   async headers() {
     return [

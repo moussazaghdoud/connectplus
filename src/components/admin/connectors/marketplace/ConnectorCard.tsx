@@ -26,40 +26,12 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 /**
- * Connector logo URLs — using Clearbit Logo API (reliable, free).
- * Format: https://logo.clearbit.com/{domain}?size=80
+ * Local connector logos — served from /public/connectors/.
+ * Guaranteed to load (no external CDN dependency).
  */
-const CONNECTOR_LOGOS: Record<string, string> = {
-  hubspot: "https://logo.clearbit.com/hubspot.com?size=80",
-  "zoho-crm": "https://logo.clearbit.com/zoho.com?size=80",
-  salesforce: "https://logo.clearbit.com/salesforce.com?size=80",
-  "dynamics-365": "https://logo.clearbit.com/microsoft.com?size=80",
-  zendesk: "https://logo.clearbit.com/zendesk.com?size=80",
-  freshdesk: "https://logo.clearbit.com/freshdesk.com?size=80",
-  servicenow: "https://logo.clearbit.com/servicenow.com?size=80",
-  pipedrive: "https://logo.clearbit.com/pipedrive.com?size=80",
-  intercom: "https://logo.clearbit.com/intercom.com?size=80",
-  "monday-crm": "https://logo.clearbit.com/monday.com?size=80",
-  copper: "https://logo.clearbit.com/copper.com?size=80",
-  freshsales: "https://logo.clearbit.com/freshworks.com?size=80",
-  close: "https://logo.clearbit.com/close.com?size=80",
-  sugarcrm: "https://logo.clearbit.com/sugarcrm.com?size=80",
-  insightly: "https://logo.clearbit.com/insightly.com?size=80",
-  nutshell: "https://logo.clearbit.com/nutshell.com?size=80",
-  capsule: "https://logo.clearbit.com/capsulecrm.com?size=80",
-  keap: "https://logo.clearbit.com/keap.com?size=80",
-  bitrix24: "https://logo.clearbit.com/bitrix24.com?size=80",
-  "zoho-desk": "https://logo.clearbit.com/zoho.com?size=80",
-  "jira-sm": "https://logo.clearbit.com/atlassian.com?size=80",
-  helpscout: "https://logo.clearbit.com/helpscout.com?size=80",
-  front: "https://logo.clearbit.com/front.com?size=80",
-  happyfox: "https://logo.clearbit.com/happyfox.com?size=80",
-  kayako: "https://logo.clearbit.com/kayako.com?size=80",
-  "sap-sales": "https://logo.clearbit.com/sap.com?size=80",
-  "oracle-cx": "https://logo.clearbit.com/oracle.com?size=80",
-  odoo: "https://logo.clearbit.com/odoo.com?size=80",
-  creatio: "https://logo.clearbit.com/creatio.com?size=80",
-};
+function getLogoUrl(slug: string): string {
+  return `/connectors/${slug}.svg`;
+}
 
 /** Fallback letter + gradient when no logo is found */
 const CONNECTOR_COLORS: Record<string, string> = {
@@ -95,7 +67,7 @@ const CONNECTOR_COLORS: Record<string, string> = {
 };
 
 function ConnectorLogo({ slug, name }: { slug: string; name: string }) {
-  const logoUrl = CONNECTOR_LOGOS[slug];
+  const logoUrl = getLogoUrl(slug);
   const gradient = CONNECTOR_COLORS[slug] ?? "from-gray-500 to-gray-600";
   const fallbackLetter = name.charAt(0).toUpperCase();
 
