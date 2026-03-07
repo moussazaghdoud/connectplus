@@ -10,15 +10,18 @@ interface Props {
 export function RecentCalls({ calls, onClickToCall }: Props) {
   if (calls.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <div className="text-3xl mb-2">&#128203;</div>
+      <div className="flex flex-col items-center justify-center py-16 text-white/30">
+        <svg className="w-10 h-10 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
         <p className="text-sm">No recent calls</p>
       </div>
     );
   }
 
   return (
-    <div className="divide-y">
+    <div>
       {calls.map((call) => {
         const isInbound = call.direction === "inbound";
         const displayNumber = isInbound ? call.fromNumber : call.toNumber;
@@ -31,33 +34,32 @@ export function RecentCalls({ calls, onClickToCall }: Props) {
         return (
           <div
             key={call.correlationId}
-            className="flex items-center px-4 py-3 hover:bg-gray-50"
+            className="flex items-center px-4 py-3 hover:bg-white/5 border-b border-white/5 transition-colors"
           >
             {/* Direction icon */}
             <div className="mr-3">
-              <span
-                className={`text-lg ${
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center border ${
                   call.state === "missed"
-                    ? "text-red-500"
+                    ? "bg-red-500/10 border-red-500/20 text-red-400"
                     : isInbound
-                      ? "text-blue-500"
-                      : "text-green-500"
+                      ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                 }`}
               >
-                {call.state === "missed"
-                  ? "↙"
-                  : isInbound
-                    ? "↙"
-                    : "↗"}
-              </span>
+                <svg className={`w-3.5 h-3.5 ${isInbound ? "" : "rotate-180"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <polyline points="19 12 12 19 5 12" />
+                </svg>
+              </div>
             </div>
 
             {/* Call info */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">
+              <p className="text-sm font-medium text-white/85 truncate">
                 {displayName || displayNumber}
               </p>
-              <div className="flex items-center gap-2 text-xs text-gray-400">
+              <div className="flex items-center gap-2 text-xs text-white/30">
                 {displayName && (
                   <span className="font-mono">{displayNumber}</span>
                 )}
@@ -68,27 +70,28 @@ export function RecentCalls({ calls, onClickToCall }: Props) {
               </div>
             </div>
 
-            {/* Disposition badge */}
+            {/* Disposition badge + call button */}
             <div className="flex items-center gap-2 ml-2">
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                className={`text-[10px] px-2 py-0.5 rounded-full border ${
                   call.disposition === "answered"
-                    ? "bg-green-100 text-green-700"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                     : call.disposition === "missed"
-                      ? "bg-red-100 text-red-700"
-                      : "bg-gray-100 text-gray-600"
+                      ? "bg-red-500/10 text-red-400 border-red-500/20"
+                      : "bg-white/5 text-white/40 border-white/10"
                 }`}
               >
                 {call.disposition || call.state}
               </span>
 
-              {/* Click-to-call button */}
               <button
                 onClick={() => onClickToCall(displayNumber)}
-                className="w-8 h-8 rounded-full bg-green-50 hover:bg-green-100 text-green-600 flex items-center justify-center text-sm"
+                className="w-8 h-8 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors"
                 title={`Call ${displayNumber}`}
               >
-                &#128222;
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
+                </svg>
               </button>
             </div>
           </div>

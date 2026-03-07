@@ -47,37 +47,37 @@ export function CallWrapUp({
   return (
     <div className="flex flex-col px-4 py-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Call Wrap-Up</h3>
+        <h3 className="text-sm font-semibold text-white/80">Call Wrap-Up</h3>
         <button
           onClick={onDismiss}
-          className="text-gray-400 hover:text-gray-600 text-sm"
+          className="text-white/30 hover:text-white/60 text-sm transition-colors"
         >
           Skip
         </button>
       </div>
 
-      {/* Call info */}
-      <div className="bg-gray-50 rounded-lg px-3 py-2 mb-3 text-xs text-gray-600">
+      {/* Call info — glass card */}
+      <div className="backdrop-blur-sm bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 mb-3 text-xs text-white/50">
         <div className="flex justify-between">
           <span>{direction === "inbound" ? "Inbound" : "Outbound"}</span>
           <span>{formatDuration(duration)}</span>
         </div>
-        <div className="font-mono mt-0.5">
+        <div className="font-mono mt-0.5 text-white/70">
           {contactName ? `${contactName} (${phone})` : phone}
         </div>
       </div>
 
-      {/* Disposition */}
-      <label className="text-xs font-medium text-gray-600 mb-1">Outcome</label>
+      {/* Disposition — glass pills */}
+      <label className="text-xs font-medium text-white/50 mb-1.5">Outcome</label>
       <div className="flex gap-1.5 mb-3">
         {DISPOSITIONS.map((d) => (
           <button
             key={d.value}
             onClick={() => setDisposition(d.value)}
-            className={`flex-1 py-1.5 text-xs rounded-md border transition-colors ${
+            className={`flex-1 py-1.5 text-xs rounded-xl border transition-all ${
               disposition === d.value
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                : "bg-white/5 text-white/40 border-white/10 hover:bg-white/8 hover:border-white/15"
             }`}
           >
             {d.label}
@@ -85,21 +85,21 @@ export function CallWrapUp({
         ))}
       </div>
 
-      {/* Notes */}
-      <label className="text-xs font-medium text-gray-600 mb-1">Notes</label>
+      {/* Notes — glass textarea */}
+      <label className="text-xs font-medium text-white/50 mb-1.5">Notes</label>
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         placeholder="Add call notes..."
         rows={3}
-        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 mb-3"
+        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/20 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400/50 focus:border-blue-400/30 mb-3"
       />
 
-      {/* Save */}
+      {/* Save — glass button */}
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors"
+        className="w-full py-2.5 bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-white/5 disabled:text-white/20 text-blue-400 text-sm font-medium rounded-xl border border-blue-500/20 disabled:border-white/5 transition-colors"
       >
         {saving ? "Saving..." : "Save & Close"}
       </button>

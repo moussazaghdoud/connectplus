@@ -39,7 +39,7 @@ export default function CtiWidgetPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-gray-400 text-sm">Loading...</div>
+        <div className="animate-pulse text-white/40 text-sm">Loading...</div>
       </div>
     );
   }
@@ -47,13 +47,13 @@ export default function CtiWidgetPage() {
   if (error || !user) {
     return (
       <div className="flex items-center justify-center h-screen p-4">
-        <div className="text-center">
-          <p className="text-red-500 text-sm mb-2">{error || "Authentication required"}</p>
+        <div className="text-center backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6">
+          <p className="text-red-400 text-sm mb-3">{error || "Authentication required"}</p>
           <a
             href="/login"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 text-sm underline"
+            className="text-blue-400 text-sm underline hover:text-blue-300 transition-colors"
           >
             Open login page
           </a>
