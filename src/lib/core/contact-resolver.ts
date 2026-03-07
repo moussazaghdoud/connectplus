@@ -156,26 +156,38 @@ export class ContactResolver {
       const externals = await connector.searchContacts({ ...query, tenantId });
       logger.info(
         { connectorId: query.connectorId, rawCount: externals.length },
-        "Live CRM search returned results"
+        `Live CRM search: ${externals.length} result(s) from ${query.connectorId}`
       );
       for (const ext of externals) {
+        // Log raw CRM fields for phone debugging
+        const raw = ext.raw as Record<string, unknown>;
+        logger.info(
+          {
+            connectorId: query.connectorId,
+            Phone: raw.Phone,
+            Mobile: raw.Mobile,
+            Home_Phone: raw.Home_Phone,
+            Other_Phone: raw.Other_Phone,
+            Fax: raw.Fax,
+          },
+          `Raw CRM phone fields for ${raw.First_Name} ${raw.Last_Name}`
+        );
         const mapped = connector.mapContact(ext);
         logger.info(
           {
             connectorId: query.connectorId,
             displayName: mapped.displayName,
-            phone: mapped.phone,
             phonesCount: mapped.phones?.length ?? 0,
-            phones: mapped.phones,
+            phones: JSON.stringify(mapped.phones),
           },
-          "Mapped contact from live CRM"
+          `Mapped: ${mapped.displayName} → ${mapped.phones?.length ?? 0} phone(s)`
         );
         this.mergeResult(results, mapped);
       }
     } catch (err) {
       logger.error(
         { connectorId: query.connectorId, err: (err as Error).message, stack: (err as Error).stack },
-        "Connector search FAILED"
+        `Connector search FAILED: ${query.connectorId} — ${(err as Error).message}`
       );
     }
   }
