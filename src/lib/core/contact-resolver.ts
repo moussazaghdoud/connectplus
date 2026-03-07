@@ -87,6 +87,10 @@ export class ContactResolver {
     const configs = await prisma.connectorConfig.findMany({
       where: { tenantId, enabled: true },
     });
+    logger.info(
+      { tenantId, activeConnectors: configs.map((c) => c.connectorId), query: query.query },
+      "Searching all active CRM connectors"
+    );
 
     for (const config of configs) {
       try {
@@ -150,14 +154,28 @@ export class ContactResolver {
       }
 
       const externals = await connector.searchContacts({ ...query, tenantId });
+      logger.info(
+        { connectorId: query.connectorId, rawCount: externals.length },
+        "Live CRM search returned results"
+      );
       for (const ext of externals) {
         const mapped = connector.mapContact(ext);
+        logger.info(
+          {
+            connectorId: query.connectorId,
+            displayName: mapped.displayName,
+            phone: mapped.phone,
+            phonesCount: mapped.phones?.length ?? 0,
+            phones: mapped.phones,
+          },
+          "Mapped contact from live CRM"
+        );
         this.mergeResult(results, mapped);
       }
     } catch (err) {
-      logger.warn(
-        { connectorId: query.connectorId, err },
-        "Connector search failed, returning local results only"
+      logger.error(
+        { connectorId: query.connectorId, err: (err as Error).message, stack: (err as Error).stack },
+        "Connector search FAILED"
       );
     }
   }

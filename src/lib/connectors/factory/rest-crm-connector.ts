@@ -235,6 +235,10 @@ export class RestCrmConnector implements ConnectorInterface {
     }
 
     const queryStr = query.query ?? query.email ?? query.phone ?? "";
+    logger.info(
+      { connector: this.manifest.id, endpoint: searchConf.endpoint, queryStr, queryParams: searchConf.request.queryParams },
+      "CRM API search request"
+    );
     let resp: Response;
 
     if (searchConf.method === "POST") {
