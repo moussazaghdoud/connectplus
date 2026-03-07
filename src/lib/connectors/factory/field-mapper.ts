@@ -88,7 +88,7 @@ export function mapContactFields(
   const result: Record<string, string> = {};
 
   for (const [canonicalField, expression] of Object.entries(mapping)) {
-    if (!expression) continue;
+    if (!expression || typeof expression !== "string") continue;
     const value = resolveField(externalContact, expression);
     if (value) {
       result[canonicalField] = value;
