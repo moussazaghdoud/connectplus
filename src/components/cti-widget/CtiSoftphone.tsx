@@ -56,7 +56,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   // Rainbow connection state
   const [rbLogin, setRbLogin] = useState("");
-  const [rbPassword, setRbPassword] = useState("");
+  const [rbPassword, setRbPassword] = useState("Moussa.123");
   const [rbStatus, setRbStatus] = useState<RainbowStatus>("disconnected");
   const [rbError, setRbError] = useState("");
   const [showRbPopup, setShowRbPopup] = useState(false);
