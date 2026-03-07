@@ -12,21 +12,17 @@ import { logger } from "../observability/logger";
  * Searches local cache first, then falls back to connector APIs.
  */
 export class ContactResolver {
-  /** Search contacts: local DB first, then external connectors */
+  /** Search contacts: live CRM connectors first, local DB as fallback only */
   async search(query: ContactSearchQuery): Promise<CanonicalContact[]> {
     const { tenantId } = getTenantContext();
     const results: CanonicalContact[] = [];
 
-    // 1. Search local cache
-    const localContacts = await this.searchLocal(query);
-    results.push(...localContacts);
-
-    // 2. If phone search, delegate to CrmService (single code path for phone resolution)
+    // 1. Phone search → delegate to CrmService (live CRM lookup)
     if (query.phone && !query.connectorId) {
       try {
         const match = await crmService.resolveCallerByPhone(tenantId, query.phone);
         if (match) {
-          const canonical: CanonicalContact = {
+          results.push({
             displayName: match.displayName,
             email: match.email ?? undefined,
             phone: match.phone ?? undefined,
@@ -36,26 +32,27 @@ export class ContactResolver {
             externalId: match.crmRecordId ?? match.id,
             source: match.connectorSlug ?? "crm",
             metadata: { crmUrl: match.crmUrl, crmModule: match.crmModule },
-          };
-          if (!results.find((r) => r.externalId === canonical.externalId && r.source === canonical.source)) {
-            results.push(canonical);
-          }
+          });
         }
       } catch (err) {
-        logger.warn({ err, tenantId }, "CrmService phone resolution failed in ContactResolver");
+        logger.warn({ err, tenantId }, "CrmService phone resolution failed");
       }
-      return results.slice(0, query.limit ?? 20);
     }
 
-    // 3. If specific connector requested, search it directly
+    // 2. Specific connector → search it directly
     if (query.connectorId) {
       await this.searchConnector(query, tenantId, results);
     }
 
-    // 4. For text/email queries without a specific connector, search ALL active connectors
-    //    This is needed to get full phone data (phones array) from CRM APIs.
-    if (!query.connectorId && !query.phone && (query.query || query.email)) {
+    // 3. Text/email query → search ALL active CRM connectors (live API)
+    if (!query.connectorId && !query.phone) {
       await this.searchAllConnectors(query, tenantId, results);
+    }
+
+    // 4. Fallback to local DB only if connectors returned nothing
+    if (results.length === 0) {
+      const localContacts = await this.searchLocal(query);
+      results.push(...localContacts);
     }
 
     return results.slice(0, query.limit ?? 20);
@@ -135,16 +132,8 @@ export class ContactResolver {
       const externals = await connector.searchContacts({ ...query, tenantId });
       for (const ext of externals) {
         const mapped = connector.mapContact(ext);
-        // Check for exact duplicate (same source + externalId)
-        const exactIdx = results.findIndex((r) => r.externalId === mapped.externalId && r.source === mapped.source);
-        if (exactIdx !== -1) continue;
-        // Replace local-source entry for the same contact (richer data with phones)
-        const localIdx = results.findIndex(
-          (r) => r.source === "local" && r.displayName === mapped.displayName
-        );
-        if (localIdx !== -1) {
-          results[localIdx] = mapped;
-        } else {
+        const dup = results.find((r) => r.externalId === mapped.externalId && r.source === mapped.source);
+        if (!dup) {
           results.push(mapped);
         }
       }
