@@ -188,7 +188,7 @@ const connectors = [
           priority: 0,
           endpoint: "/Contacts/search",
           method: "GET",
-          request: { queryParams: { word: "{{phone}}" } },
+          request: { queryParams: { word: "{{query}}" } },
           response: { resultsPath: "data", idField: "id" },
           crmModule: "Contacts",
           fieldMapping: {
@@ -205,7 +205,7 @@ const connectors = [
           priority: 1,
           endpoint: "/Leads/search",
           method: "GET",
-          request: { queryParams: { word: "{{phone}}" } },
+          request: { queryParams: { word: "{{query}}" } },
           response: { resultsPath: "data", idField: "id" },
           crmModule: "Leads",
           fieldMapping: {
@@ -222,7 +222,7 @@ const connectors = [
           priority: 2,
           endpoint: "/Accounts/search",
           method: "GET",
-          request: { queryParams: { word: "{{phone}}" } },
+          request: { queryParams: { word: "{{query}}" } },
           response: { resultsPath: "data", idField: "id" },
           crmModule: "Accounts",
           fieldMapping: {

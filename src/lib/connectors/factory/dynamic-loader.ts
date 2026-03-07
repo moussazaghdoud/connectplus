@@ -19,6 +19,10 @@ class DynamicConnectorLoader {
     let loaded = 0;
 
     try {
+      // One-time data patch: fix search strategies that use {{phone}} instead of {{query}}
+      // so text searches (by name/email) work correctly against CRM APIs.
+      await this.patchSearchStrategyTemplates();
+
       const definitions = await prisma.connectorDefinition.findMany({
         where: { status: "ACTIVE" },
       });
@@ -120,6 +124,49 @@ class DynamicConnectorLoader {
     } catch (err) {
       logger.error({ err, slug }, "Failed to hot-reload connector");
       return false;
+    }
+  }
+  /**
+   * Patch search strategy queryParams that incorrectly use {{phone}} instead of {{query}}.
+   * This caused text searches (e.g. "tollner") to send empty word= to Zoho API.
+   */
+  private async patchSearchStrategyTemplates(): Promise<void> {
+    try {
+      const definitions = await prisma.connectorDefinition.findMany({
+        where: { status: "ACTIVE" },
+      });
+
+      for (const def of definitions) {
+        const config = def.config as Record<string, unknown> | null;
+        if (!config) continue;
+
+        const strategies = config.searchStrategies as Array<Record<string, unknown>> | undefined;
+        if (!strategies?.length) continue;
+
+        let patched = false;
+        for (const strategy of strategies) {
+          const req = strategy.request as Record<string, unknown> | undefined;
+          const qp = req?.queryParams as Record<string, string> | undefined;
+          if (!qp) continue;
+
+          for (const [key, val] of Object.entries(qp)) {
+            if (val === "{{phone}}") {
+              qp[key] = "{{query}}";
+              patched = true;
+            }
+          }
+        }
+
+        if (patched) {
+          await prisma.connectorDefinition.update({
+            where: { slug: def.slug },
+            data: { config: config as any },
+          });
+          logger.info({ slug: def.slug }, "Patched search strategy templates: {{phone}} → {{query}}");
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, "Search strategy template patch failed (non-fatal)");
     }
   }
 }
