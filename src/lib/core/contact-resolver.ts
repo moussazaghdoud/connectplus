@@ -52,7 +52,39 @@ export class ContactResolver {
       await this.searchConnector(query, tenantId, results);
     }
 
+    // 4. For text/email queries without a specific connector, search ALL active connectors
+    //    This is needed to get full phone data (phones array) from CRM APIs.
+    if (!query.connectorId && !query.phone && (query.query || query.email)) {
+      await this.searchAllConnectors(query, tenantId, results);
+    }
+
     return results.slice(0, query.limit ?? 20);
+  }
+
+  /** Search ALL active connectors for text/email queries */
+  private async searchAllConnectors(
+    query: ContactSearchQuery,
+    tenantId: string,
+    results: CanonicalContact[]
+  ): Promise<void> {
+    const configs = await prisma.connectorConfig.findMany({
+      where: { tenantId, enabled: true },
+    });
+
+    for (const config of configs) {
+      try {
+        await this.searchConnector(
+          { ...query, connectorId: config.connectorId },
+          tenantId,
+          results
+        );
+      } catch (err) {
+        logger.warn(
+          { connectorId: config.connectorId, err },
+          "Connector text search failed, continuing with next"
+        );
+      }
+    }
   }
 
   /** Search a specific connector by ID */
@@ -103,7 +135,16 @@ export class ContactResolver {
       const externals = await connector.searchContacts({ ...query, tenantId });
       for (const ext of externals) {
         const mapped = connector.mapContact(ext);
-        if (!results.find((r) => r.externalId === mapped.externalId && r.source === mapped.source)) {
+        // Check for exact duplicate (same source + externalId)
+        const exactIdx = results.findIndex((r) => r.externalId === mapped.externalId && r.source === mapped.source);
+        if (exactIdx !== -1) continue;
+        // Replace local-source entry for the same contact (richer data with phones)
+        const localIdx = results.findIndex(
+          (r) => r.source === "local" && r.displayName === mapped.displayName
+        );
+        if (localIdx !== -1) {
+          results[localIdx] = mapped;
+        } else {
           results.push(mapped);
         }
       }
