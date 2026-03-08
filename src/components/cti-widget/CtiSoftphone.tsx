@@ -365,9 +365,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-[#006cff] text-white">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-white/20 flex items-center justify-center text-white text-xs font-bold">
-            R
-          </div>
+          <img src="/rainbow-logo.png" alt="Rainbow" className="w-7 h-7 rounded-md" />
           <span className="text-sm font-semibold tracking-wide">Rainbow CTI</span>
         </div>
         <div className="relative">
