@@ -343,29 +343,41 @@ docs/
 - Run against Railway: `DATABASE_URL="<public_url>" npx tsx prisma/seed-marketplace.ts`
 - Startup script auto-runs seed before Next.js starts
 
-## CTI Widget — Glassmorphism Design
+## CTI Widget — Zoho CRM-Compliant Design
 
-The CTI widget (`/cti-widget`) features a **glassmorphism UI** inspired by the ALE homepage:
+The CTI widget (`/cti-widget`) features a **Zoho CRM-native look and feel** — light theme, flat design, matching Zoho's design tokens.
 
-### Design System
-- **Background**: Dark gradient (`from-slate-900 via-blue-950 to-slate-900`)
-- **Glass panels**: `backdrop-blur-xl bg-white/5 border border-white/10`
-- **Text hierarchy**: `text-white/90` (primary), `text-white/50` (secondary), `text-white/30` (tertiary)
-- **Glass inputs**: `bg-white/5 border-white/10 rounded-xl` with blue focus rings
-- **Dial keys**: `bg-white/8 hover:bg-white/15 border border-white/10 rounded-full`
-- **Call buttons**: Emerald glow (`bg-emerald-500 shadow-emerald-500/30`), red glow for hangup
-- **Status dot**: Emerald glow for connected (`shadow-[0_0_8px_rgba(52,211,153,0.6)]`)
+### Design System (Zoho-compliant)
+- **Primary blue**: `#006cff` (Zoho CRM primary), hover: `#0047ff`
+- **Background**: Light gray `#f8f9fa`, cards/panels: white `bg-white`
+- **Header**: Solid `#006cff` blue bar with white text
+- **Text hierarchy**: `text-gray-800` (primary), `text-gray-500` (secondary), `text-gray-400` (muted)
+- **Inputs**: `bg-white border-gray-300 rounded-md`, focus: `ring-[#006cff]/30`
+- **Buttons**: Solid `#006cff` (primary), `#2ecc71` green (call), `#e74c3c` red (hangup)
+- **Borders**: `border-gray-200` (cards), `border-gray-100` (list dividers)
+- **Font**: Roboto, Lato, system sans-serif (Zoho Puvi fallback)
+- **Border radius**: `6px` buttons (rounded-md), `4-6px` inputs, `rounded-full` circles
 - **Icons**: SVG throughout (phone, signal, user, clock, mic, pause, keypad, transfer, backspace)
-- **Rounded corners**: `rounded-2xl` panels, `rounded-xl` inputs/buttons, `rounded-full` circles
+- **Logo**: Rainbow logo image (`/rainbow-logo.png`) in header
 
 ### 4 Tabs
-- **Dial**: Glass number display + translucent dial pad → click-to-call via WebRTC
-- **Active**: Glass avatar with glow + call controls (SVG icons, glass buttons)
-- **Contacts**: Glass search bar → live CRM results with all phones + individual call buttons
-- **Recent**: Glass call history with direction arrows + disposition badges
+- **Dial**: Number input + compact dial pad (14x14 keys) → click-to-call via WebRTC
+- **Active**: Avatar + call controls (mute, hold, keypad, transfer, hangup)
+- **Contacts**: Search bar → live CRM results with all phones + individual call buttons
+- **Recent**: Call history with direction arrows + disposition badges
+
+### Widget Sizing
+- Fills 100% of Zoho telephony panel (no max-width, no scroll)
+- Compact dial pad fits within standard 400x600 widget container
+- Content area uses `overflow-hidden` / `min-h-0` for proper flex layout
 
 ### Default Rainbow Password
 - Set to `Moussa.123` in `useState` initializer
+
+### Error Guards
+- `callAction()` skips if `agentId` is missing (prevents errors during deploy restarts)
+- `handleDial()` validates and cleans phone number before API call (min 3 digits)
+- Rainbow login input uses `type="text"` to avoid HTML5 email validation blocking
 
 ## Security
 
@@ -444,30 +456,41 @@ Instant messaging, presence/availability, channels/rooms, video calls, screen sh
 ## Zoho CRM Widget Integration
 
 ### Zoho Developer Portal Extension
-- **Extension name**: Rainbow CTI
-- **Portal**: https://platform.zoho.com
+- **Extension name**: Rainbow CTI (published, private)
+- **Portal**: https://platform.zoho.com (Developer) / https://sigma.zoho.com (Sigma workspace)
 - **Type**: Telephony (Zoho PhoneBridge framework)
+- **Production CRM**: https://crm.zoho.com (MZCorp org)
 - **Sandbox CRM**: https://plugin-rainbowcti.zohosandbox.com
+- **Status**: Published (private, not public Marketplace)
 
 ### Telephony Widget Setup
 The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 1. Developer portal → Extension → **Telephony** (left sidebar)
-2. **Call Center Name**: Rainbow Widget (or ConnectPlus CTI)
-3. **Sandbox URL**: Auto-filled base from extension config + resource path `/app/widget.html`
-4. **Production URL**: Same pattern
-5. The full URL resolves to: `https://connectplus-production-0fbf.up.railway.app/cti-widget/app/widget.html`
-6. Next.js `redirects()` in `next.config.ts` redirects `/cti-widget/app/widget.html` → `/cti-widget`
-7. Result: Phone icon appears in bottom-right of Zoho CRM → opens CTI softphone panel
+2. **Call Center Name**: Rainbow Widget
+3. **Base URL**: Auto-filled from Connected App config (cannot be changed after creation)
+4. **Resource path**: `/cti-widget` (appended to base URL)
+5. Next.js `redirects()` in `next.config.ts` redirects `/cti-widget/app/widget.html` → `/cti-widget`
+6. `headers()` with `frame-ancestors *` CSP allows Zoho to iframe the widget
+7. Result: Phone icon in bottom-right of Zoho CRM → opens CTI softphone panel
+
+### Setup Guide (from scratch)
+1. Create extension at platform.zoho.com → **New Extension** (CRM, external hosting)
+2. Set base URL to `https://connectplus-production-0fbf.up.railway.app` (NO `/cti-widget`)
+3. Go to **Telephony** sidebar → set resource path `/cti-widget`
+4. **Test your Extension** → installs to sandbox/production org
+5. **Publish** (private) → installs to production CRM
+6. Phone icon appears in Zoho CRM bottom-right toolbar
 
 ### Widget Files (zoho-widget/)
 - `plugin-manifest.json` — Extension manifest: telephony widget, 400x600, `/app/widget.html`
-- `app/widget.html` — Iframe wrapper: loads Zoho Embedded SDK, iframes `/cti-widget`, dark background, handles `openCrmRecord` postMessage
+- `app/widget.html` — Iframe wrapper: loads Zoho Embedded SDK, iframes `/cti-widget`, light `#f8f9fa` background, handles `openCrmRecord` postMessage
 - `widget.zip` — Packaged extension for upload
 
 ### Key Config
 - `next.config.ts` has `redirects()` for `/cti-widget/app/widget.html` → `/cti-widget`
 - `next.config.ts` has `headers()` with `frame-ancestors *` CSP for `/cti-widget` routes
 - Zoho Embedded SDK: `https://live.zwidgets.com/js-sdk/1.2/ZohoEmbeddedApp.min.js`
+- Rainbow logo: `public/rainbow-logo.png` (displayed in widget header)
 
 ## Known Issues & Fixes Applied
 
@@ -487,6 +510,11 @@ The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 - **Search strategy templates**: Changed `{{phone}}` → `{{query}}` so text searches pass the term to CRM APIs (auto-patched on startup)
 - **field-mapper crash**: `mapContactFields` called `.includes()` on `phoneFields` object → added `typeof !== "string"` guard
 - **Contact search was local-only**: Text queries only hit local DB. Now searches all active CRM connectors live, local DB as fallback, live data replaces stale entries
+- **Glassmorphism → Zoho theme**: Redesigned CTI widget from dark glassmorphism to Zoho CRM-native light theme (`#006cff` blue, white cards, Roboto font, flat design)
+- **Widget height overflow**: Removed `max-w-sm` constraint, compact dial pad (14x14 keys), `overflow-hidden` on content area — widget fills container without scroll
+- **Connect button disabled**: Changed Rainbow login from `type="email"` to `type="text"` to avoid HTML5 validation blocking the Connect button
+- **Missing required fields error**: Added guards in `callAction()` (skip if no agentId) and `handleDial()` (validate number) to prevent errors during Railway deploy restarts
+- **Zoho widget 404**: Base URL in Zoho extension included `/cti-widget` causing double path. Fixed by setting correct base URL or using redirects
 
 ## Test Suite
 
