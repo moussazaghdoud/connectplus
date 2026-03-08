@@ -83,7 +83,7 @@ export function ContactSearch({ onClickToCall }: Props) {
       </div>
 
       {/* Results */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {!searched && (
           <div className="flex flex-col items-center justify-center py-12 text-gray-400">
             <svg className="w-10 h-10 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

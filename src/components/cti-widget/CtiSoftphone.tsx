@@ -406,10 +406,11 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
                 >
                   <p className="text-sm font-medium text-gray-700">Rainbow Login</p>
                   <input
-                    type="email"
+                    type="text"
                     value={rbLogin}
                     onChange={(e) => setRbLogin(e.target.value)}
                     placeholder="Rainbow email"
+                    autoComplete="email"
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#006cff]/30 focus:border-[#006cff]"
                   />
                   <input
@@ -424,7 +425,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
                   )}
                   <button
                     type="submit"
-                    disabled={rbStatus === "connecting" || !rbLogin.trim() || !rbPassword.trim()}
+                    disabled={rbStatus === "connecting" || rbLogin.length === 0 || rbPassword.length === 0}
                     className="w-full py-2 bg-[#006cff] hover:bg-[#0047ff] disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-md transition-colors"
                   >
                     {rbStatus === "connecting" ? "Connecting..." : "Connect"}
@@ -476,8 +477,8 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
         ))}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto bg-[#f8f9fa]">
+      {/* Content — fills remaining height, no scroll */}
+      <div className="flex-1 min-h-0 overflow-hidden bg-[#f8f9fa]">
         {wrapUp && tab === "phone" && (
           <CallWrapUp
             correlationId={wrapUp.correlationId}

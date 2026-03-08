@@ -50,10 +50,10 @@ export function DialPad({ onDial, onDtmf, hasActiveCall }: Props) {
   };
 
   return (
-    <div className="flex flex-col items-center px-6 py-5">
+    <div className="flex flex-col items-center justify-center h-full px-4 py-3">
       {/* Number display */}
-      <div className="w-full mb-5">
-        <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3 min-h-[52px] shadow-sm">
+      <div className="w-full mb-3">
+        <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2 min-h-[44px] shadow-sm">
           <input
             type="tel"
             value={number}
@@ -78,15 +78,15 @@ export function DialPad({ onDial, onDtmf, hasActiveCall }: Props) {
       </div>
 
       {/* Dial pad grid */}
-      <div className="grid grid-cols-3 gap-3 mb-5 w-full max-w-[240px]">
+      <div className="grid grid-cols-3 gap-2 mb-3 w-full max-w-[240px]">
         {KEYS.map((row) =>
           row.map((key) => (
             <button
               key={key}
               onClick={() => handleKeyPress(key)}
-              className="flex flex-col items-center justify-center w-16 h-16 mx-auto rounded-full bg-white hover:bg-gray-50 active:bg-gray-100 border border-gray-200 transition-all duration-150 shadow-sm"
+              className="flex flex-col items-center justify-center w-14 h-14 mx-auto rounded-full bg-white hover:bg-gray-50 active:bg-gray-100 border border-gray-200 transition-all duration-150 shadow-sm"
             >
-              <span className="text-xl font-medium text-gray-800">{key}</span>
+              <span className="text-lg font-medium text-gray-800">{key}</span>
               {SUB_LABELS[key] && (
                 <span className="text-[9px] text-gray-400 tracking-wider">
                   {SUB_LABELS[key]}
@@ -101,7 +101,7 @@ export function DialPad({ onDial, onDtmf, hasActiveCall }: Props) {
       <button
         onClick={handleDial}
         disabled={number.replace(/[^0-9+]/g, "").length < 3}
-        className="w-16 h-16 rounded-full bg-[#2ecc71] hover:bg-[#27ae60] disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-2xl flex items-center justify-center transition-all shadow-md"
+        className="w-14 h-14 rounded-full bg-[#2ecc71] hover:bg-[#27ae60] disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-2xl flex items-center justify-center transition-all shadow-md"
         title="Call"
       >
         <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
