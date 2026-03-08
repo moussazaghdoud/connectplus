@@ -231,6 +231,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   const callAction = useCallback(
     async (action: string, body: Record<string, unknown> = {}) => {
+      if (!agentId) return; // Guard: no action without agentId
       try {
         const res = await fetch(`/api/v1/cti/call/${action}`, {
           method: "POST",
@@ -240,9 +241,11 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
+          console.warn(`[CTI] callAction ${action} failed:`, data.error);
           setError(data.error || `Action failed: ${action}`);
         }
-      } catch {
+      } catch (err) {
+        console.warn(`[CTI] callAction ${action} error:`, err);
         setError(`Failed to ${action}`);
       }
     },
@@ -251,10 +254,12 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   const handleDial = useCallback(
     async (number: string) => {
+      const cleaned = number?.replace(/[^0-9+*#]/g, "");
+      if (!cleaned || cleaned.length < 3) return;
       if (rbStatus === "connected") {
-        await webrtc.makeCall(number);
+        await webrtc.makeCall(cleaned);
       }
-      callAction("start", { number });
+      callAction("start", { number: cleaned });
     },
     [callAction, rbStatus, webrtc]
   );
