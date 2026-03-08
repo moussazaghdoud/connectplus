@@ -446,6 +446,9 @@ export class RestCrmConnector implements ConnectorInterface {
   // ── Health Check ───────────────────────────────────────
 
   async healthCheck(config: TenantConnectorConfig): Promise<HealthStatus> {
+    // Refresh token if expired before health check
+    await this.ensureFreshToken();
+
     const hc = this.def.healthCheck ?? { endpoint: "/", method: "GET" as const };
     const url = resolveEndpoint(this.resolveBaseUrl(), hc.endpoint);
     const hcValidation = validateUrl(url);
