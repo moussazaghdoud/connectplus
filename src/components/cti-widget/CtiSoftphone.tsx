@@ -56,10 +56,12 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   // Rainbow connection state
   const [rbLogin, setRbLogin] = useState("");
-  const [rbPassword, setRbPassword] = useState("Moussa.123");
+  const [rbPassword, setRbPassword] = useState("");
   const [rbStatus, setRbStatus] = useState<RainbowStatus>("disconnected");
   const [rbError, setRbError] = useState("");
   const [showRbPopup, setShowRbPopup] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const autoConnectAttempted = useRef(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const webrtc = useRainbowWebSDK(null);
 
@@ -73,6 +75,55 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     const saved = localStorage.getItem("connectplus_rb_login");
     if (saved) setRbLogin(saved);
   }, []);
+
+  // Auto-connect: fetch saved credentials from server and connect automatically
+  useEffect(() => {
+    if (autoConnectAttempted.current) return;
+    autoConnectAttempted.current = true;
+
+    async function tryAutoConnect() {
+      try {
+        const res = await fetch("/api/v1/auth/rainbow-credentials", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.saved) return;
+
+        // Fill in credentials and trigger connect
+        setRbLogin(data.login);
+        setRbPassword(data.password);
+        setRememberMe(true);
+        setRbStatus("connecting");
+        setRbError("");
+        localStorage.setItem("connectplus_rb_login", data.login);
+
+        const resp = await fetch("/api/v1/rainbow/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ login: data.login, password: data.password, mode: "webrtc" }),
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          setRbStatus("error");
+          setRbError(result.error?.message || `HTTP ${resp.status}`);
+          return;
+        }
+        if (!result.webrtc) {
+          setRbStatus("error");
+          setRbError("Server did not return WebRTC credentials");
+          return;
+        }
+        await webrtc.initialize(result.webrtc.appId, result.webrtc.appSecret, result.webrtc.host);
+        await webrtc.login(data.login, data.password);
+        setRbStatus("connected");
+      } catch (err) {
+        setRbStatus("error");
+        setRbError(err instanceof Error ? err.message : "Auto-connect failed");
+      }
+    }
+
+    tryAutoConnect();
+  }, [webrtc]);
 
   // Close popup on outside click
   useEffect(() => {
@@ -132,11 +183,26 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       await webrtc.login(rbLogin, rbPassword);
       setRbStatus("connected");
       setShowRbPopup(false);
+
+      // Save or clear credentials based on "Remember me"
+      if (rememberMe) {
+        fetch("/api/v1/auth/rainbow-credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ login: rbLogin, password: rbPassword }),
+        }).catch(() => {});
+      } else {
+        fetch("/api/v1/auth/rainbow-credentials", {
+          method: "DELETE",
+          credentials: "include",
+        }).catch(() => {});
+      }
     } catch (err) {
       setRbStatus("error");
       setRbError(err instanceof Error ? err.message : "Connection failed");
     }
-  }, [rbLogin, rbPassword, webrtc]);
+  }, [rbLogin, rbPassword, rememberMe, webrtc]);
 
   const disconnectRainbow = useCallback(async () => {
     await webrtc.logout();
@@ -145,6 +211,9 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     } catch {}
     setRbStatus("disconnected");
     setRbError("");
+    setRememberMe(false);
+    // Clear saved credentials so auto-connect won't re-trigger
+    fetch("/api/v1/auth/rainbow-credentials", { method: "DELETE", credentials: "include" }).catch(() => {});
   }, [webrtc]);
 
   const handleCallEvent = useCallback((event: CtiCallEvent) => {
@@ -423,6 +492,15 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
                     placeholder="Password"
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#006cff]/30 focus:border-[#006cff]"
                   />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-[#006cff] focus:ring-[#006cff]/30"
+                    />
+                    <span className="text-xs text-gray-500">Remember me (auto-connect)</span>
+                  </label>
                   {rbError && (
                     <p className="text-xs text-red-600">{rbError}</p>
                   )}
