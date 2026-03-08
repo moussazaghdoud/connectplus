@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 /**
  * Minimal layout for the embedded CTI widget.
  * No nav/footer — designed for CRM iframe embedding.
- * Dark gradient background for glassmorphism style.
+ * Fills 100% of the available widget space.
  */
 export default function CtiWidgetLayout({
   children,
@@ -15,7 +15,7 @@ export default function CtiWidgetLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="h-screen w-full bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 overflow-hidden">
+    <div className="h-screen w-full bg-[#f8f9fa] overflow-hidden" style={{ fontFamily: "'Roboto', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       {children}
     </div>
   );

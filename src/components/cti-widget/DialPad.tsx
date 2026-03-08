@@ -51,20 +51,20 @@ export function DialPad({ onDial, onDtmf, hasActiveCall }: Props) {
 
   return (
     <div className="flex flex-col items-center px-6 py-5">
-      {/* Number display — glass input */}
+      {/* Number display */}
       <div className="w-full mb-5">
-        <div className="flex items-center justify-between backdrop-blur-sm bg-white/5 border border-white/10 rounded-2xl px-4 py-3 min-h-[52px]">
+        <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3 min-h-[52px] shadow-sm">
           <input
             type="tel"
             value={number}
             onChange={(e) => setNumber(e.target.value)}
             placeholder="Enter number..."
-            className="bg-transparent text-xl font-mono text-white w-full outline-none placeholder:text-white/20 tracking-wider"
+            className="bg-transparent text-xl font-mono text-gray-800 w-full outline-none placeholder:text-gray-300 tracking-wider"
           />
           {number && (
             <button
               onClick={handleBackspace}
-              className="text-white/30 hover:text-white/60 ml-2 transition-colors"
+              className="text-gray-400 hover:text-gray-600 ml-2 transition-colors"
               title="Backspace"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -77,18 +77,18 @@ export function DialPad({ onDial, onDtmf, hasActiveCall }: Props) {
         </div>
       </div>
 
-      {/* Dial pad grid — glass buttons */}
+      {/* Dial pad grid */}
       <div className="grid grid-cols-3 gap-3 mb-5 w-full max-w-[240px]">
         {KEYS.map((row) =>
           row.map((key) => (
             <button
               key={key}
               onClick={() => handleKeyPress(key)}
-              className="flex flex-col items-center justify-center w-16 h-16 mx-auto rounded-full bg-white/8 hover:bg-white/15 active:bg-white/20 border border-white/10 transition-all duration-150"
+              className="flex flex-col items-center justify-center w-16 h-16 mx-auto rounded-full bg-white hover:bg-gray-50 active:bg-gray-100 border border-gray-200 transition-all duration-150 shadow-sm"
             >
-              <span className="text-xl font-medium text-white/90">{key}</span>
+              <span className="text-xl font-medium text-gray-800">{key}</span>
               {SUB_LABELS[key] && (
-                <span className="text-[9px] text-white/30 tracking-wider">
+                <span className="text-[9px] text-gray-400 tracking-wider">
                   {SUB_LABELS[key]}
                 </span>
               )}
@@ -97,11 +97,11 @@ export function DialPad({ onDial, onDtmf, hasActiveCall }: Props) {
         )}
       </div>
 
-      {/* Call button — green glow */}
+      {/* Call button */}
       <button
         onClick={handleDial}
         disabled={number.replace(/[^0-9+]/g, "").length < 3}
-        className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/10 disabled:border-white/5 disabled:shadow-none disabled:cursor-not-allowed text-white text-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-400/40 border border-emerald-400/30"
+        className="w-16 h-16 rounded-full bg-[#2ecc71] hover:bg-[#27ae60] disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-2xl flex items-center justify-center transition-all shadow-md"
         title="Call"
       >
         <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

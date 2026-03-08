@@ -59,12 +59,12 @@ export function ActiveCallPanel({
 
   if (!call) {
     return (
-      <div className="flex flex-col items-center justify-center h-full py-16 text-white/30">
+      <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400">
         <svg className="w-12 h-12 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
         </svg>
         <p className="text-sm">No active call</p>
-        <p className="text-xs text-white/20 mt-1">Use the dial pad to make a call</p>
+        <p className="text-xs text-gray-300 mt-1">Use the dial pad to make a call</p>
       </div>
     );
   }
@@ -84,34 +84,34 @@ export function ActiveCallPanel({
 
   return (
     <div className="flex flex-col items-center py-6 px-4">
-      {/* Avatar — glass circle with glow */}
+      {/* Avatar */}
       <div
-        className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 border transition-all ${
+        className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 transition-all ${
           isRinging
-            ? "bg-yellow-500/20 border-yellow-400/40 shadow-lg shadow-yellow-500/20 animate-pulse"
+            ? "bg-yellow-500 animate-pulse"
             : call.isOnHold
-              ? "bg-orange-500/20 border-orange-400/40 shadow-lg shadow-orange-500/20"
-              : "bg-blue-500/20 border-blue-400/30 shadow-lg shadow-blue-500/20"
+              ? "bg-orange-500"
+              : "bg-[#006cff]"
         }`}
       >
         {displayName ? displayName.charAt(0).toUpperCase() : "?"}
       </div>
 
       {displayName && (
-        <h2 className="text-lg font-semibold text-white/90">{displayName}</h2>
+        <h2 className="text-lg font-semibold text-gray-800">{displayName}</h2>
       )}
-      {company && <p className="text-sm text-white/50">{company}</p>}
-      <p className="text-sm text-white/60 font-mono mt-1">{displayNumber}</p>
+      {company && <p className="text-sm text-gray-500">{company}</p>}
+      <p className="text-sm text-gray-600 font-mono mt-1">{displayNumber}</p>
 
-      {/* Status badge — glass pill */}
+      {/* Status badge */}
       <div className="flex items-center gap-2 mt-3">
         <span
-          className={`text-xs font-medium px-3 py-1 rounded-full border backdrop-blur-sm ${
+          className={`text-xs font-medium px-3 py-1 rounded-full ${
             isRinging
-              ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+              ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
               : call.isOnHold
-                ? "bg-orange-500/10 text-orange-400 border-orange-500/30"
-                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                ? "bg-orange-50 text-orange-700 border border-orange-200"
+                : "bg-green-50 text-green-700 border border-green-200"
           }`}
         >
           {isRinging
@@ -123,7 +123,7 @@ export function ActiveCallPanel({
               : "Connected"}
         </span>
         {isActive && (
-          <span className="text-sm font-mono text-white/40">
+          <span className="text-sm font-mono text-gray-400">
             {formatTime(elapsed)}
           </span>
         )}
@@ -142,7 +142,7 @@ export function ActiveCallPanel({
               "*"
             );
           }}
-          className="mt-2 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
+          className="mt-2 text-xs text-[#006cff] hover:underline transition-colors"
         >
           Open in CRM
         </button>
@@ -154,7 +154,7 @@ export function ActiveCallPanel({
           <>
             <button
               onClick={onAnswer}
-              className="w-14 h-14 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 transition-all"
+              className="w-14 h-14 rounded-full bg-[#2ecc71] hover:bg-[#27ae60] text-white text-xl flex items-center justify-center shadow-md transition-all"
               title="Answer"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -163,7 +163,7 @@ export function ActiveCallPanel({
             </button>
             <button
               onClick={onHangup}
-              className="w-14 h-14 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xl flex items-center justify-center shadow-lg shadow-red-500/20 transition-all"
+              className="w-14 h-14 rounded-full bg-[#e74c3c] hover:bg-[#c0392b] text-white text-xl flex items-center justify-center shadow-md transition-all"
               title="Reject"
             >
               <svg className="w-6 h-6 rotate-[135deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -175,7 +175,7 @@ export function ActiveCallPanel({
 
         {isActive && (
           <>
-            <GlassControlButton
+            <ControlButton
               onClick={onMute}
               active={call.isMuted}
               label={call.isMuted ? "Unmute" : "Mute"}
@@ -196,8 +196,8 @@ export function ActiveCallPanel({
                   <line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
               )}
-            </GlassControlButton>
-            <GlassControlButton
+            </ControlButton>
+            <ControlButton
               onClick={onHold}
               active={call.isOnHold}
               label={call.isOnHold ? "Resume" : "Hold"}
@@ -206,8 +206,8 @@ export function ActiveCallPanel({
                 <rect x="6" y="4" width="4" height="16" />
                 <rect x="14" y="4" width="4" height="16" />
               </svg>
-            </GlassControlButton>
-            <GlassControlButton
+            </ControlButton>
+            <ControlButton
               onClick={() => setShowDtmf(!showDtmf)}
               active={showDtmf}
               label="Keypad"
@@ -221,8 +221,8 @@ export function ActiveCallPanel({
                 <rect x="16" y="9" width="6" height="6" rx="1" />
                 <rect x="9" y="16" width="6" height="6" rx="1" />
               </svg>
-            </GlassControlButton>
-            <GlassControlButton
+            </ControlButton>
+            <ControlButton
               onClick={() => setShowTransfer(!showTransfer)}
               active={showTransfer}
               label="Transfer"
@@ -231,10 +231,10 @@ export function ActiveCallPanel({
                 <polyline points="15 14 20 9 15 4" />
                 <path d="M4 20v-7a4 4 0 014-4h12" />
               </svg>
-            </GlassControlButton>
+            </ControlButton>
             <button
               onClick={onHangup}
-              className="w-14 h-14 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex items-center justify-center shadow-lg shadow-red-500/20 transition-all"
+              className="w-14 h-14 rounded-full bg-[#e74c3c] hover:bg-[#c0392b] text-white flex items-center justify-center shadow-md transition-all"
               title="Hang up"
             >
               <svg className="w-6 h-6 rotate-[135deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -245,7 +245,7 @@ export function ActiveCallPanel({
         )}
       </div>
 
-      {/* DTMF mini-pad — glass */}
+      {/* DTMF mini-pad */}
       {showDtmf && isActive && (
         <div className="mt-4 grid grid-cols-3 gap-2 w-48">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map(
@@ -253,7 +253,7 @@ export function ActiveCallPanel({
               <button
                 key={key}
                 onClick={() => onDtmf(key)}
-                className="py-2 bg-white/8 hover:bg-white/15 border border-white/10 rounded-xl text-sm font-mono text-white/80 transition-colors"
+                className="py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 transition-colors shadow-sm"
               >
                 {key}
               </button>
@@ -262,7 +262,7 @@ export function ActiveCallPanel({
         </div>
       )}
 
-      {/* Transfer input — glass */}
+      {/* Transfer input */}
       {showTransfer && isActive && (
         <div className="mt-4 flex gap-2 w-full max-w-xs">
           <input
@@ -270,7 +270,7 @@ export function ActiveCallPanel({
             value={transferTarget}
             onChange={(e) => setTransferTarget(e.target.value)}
             placeholder="Transfer to..."
-            className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-blue-400/50"
+            className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#006cff]/30 focus:border-[#006cff]"
           />
           <button
             onClick={() => {
@@ -280,7 +280,7 @@ export function ActiveCallPanel({
                 setShowTransfer(false);
               }
             }}
-            className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-xl text-sm transition-colors"
+            className="px-4 py-2 bg-[#006cff] hover:bg-[#0047ff] text-white rounded-lg text-sm transition-colors"
           >
             Transfer
           </button>
@@ -290,7 +290,7 @@ export function ActiveCallPanel({
   );
 }
 
-function GlassControlButton({
+function ControlButton({
   onClick,
   active,
   label,
@@ -305,15 +305,15 @@ function GlassControlButton({
     <button
       onClick={onClick}
       className={`flex flex-col items-center gap-1 ${
-        active ? "text-blue-400" : "text-white/50"
+        active ? "text-[#006cff]" : "text-gray-500"
       }`}
       title={label}
     >
       <div
         className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
           active
-            ? "bg-blue-500/20 border-2 border-blue-400/40 shadow-lg shadow-blue-500/20"
-            : "bg-white/8 hover:bg-white/12 border border-white/10"
+            ? "bg-blue-50 border-2 border-[#006cff]"
+            : "bg-white hover:bg-gray-50 border border-gray-200 shadow-sm"
         }`}
       >
         {children}

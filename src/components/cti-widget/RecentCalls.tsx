@@ -10,7 +10,7 @@ interface Props {
 export function RecentCalls({ calls, onClickToCall }: Props) {
   if (calls.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-white/30">
+      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
         <svg className="w-10 h-10 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
           <polyline points="12 6 12 12 16 14" />
@@ -34,17 +34,17 @@ export function RecentCalls({ calls, onClickToCall }: Props) {
         return (
           <div
             key={call.correlationId}
-            className="flex items-center px-4 py-3 hover:bg-white/5 border-b border-white/5 transition-colors"
+            className="flex items-center px-4 py-3 hover:bg-white border-b border-gray-100 transition-colors"
           >
             {/* Direction icon */}
             <div className="mr-3">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center ${
                   call.state === "missed"
-                    ? "bg-red-500/10 border-red-500/20 text-red-400"
+                    ? "bg-red-50 text-red-500"
                     : isInbound
-                      ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
-                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                      ? "bg-blue-50 text-[#1B6CE3]"
+                      : "bg-green-50 text-[#2ecc71]"
                 }`}
               >
                 <svg className={`w-3.5 h-3.5 ${isInbound ? "" : "rotate-180"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -56,10 +56,10 @@ export function RecentCalls({ calls, onClickToCall }: Props) {
 
             {/* Call info */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white/85 truncate">
+              <p className="text-sm font-medium text-gray-800 truncate">
                 {displayName || displayNumber}
               </p>
-              <div className="flex items-center gap-2 text-xs text-white/30">
+              <div className="flex items-center gap-2 text-xs text-gray-400">
                 {displayName && (
                   <span className="font-mono">{displayNumber}</span>
                 )}
@@ -73,12 +73,12 @@ export function RecentCalls({ calls, onClickToCall }: Props) {
             {/* Disposition badge + call button */}
             <div className="flex items-center gap-2 ml-2">
               <span
-                className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                className={`text-[10px] px-2 py-0.5 rounded-full ${
                   call.disposition === "answered"
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    ? "bg-green-50 text-green-700 border border-green-200"
                     : call.disposition === "missed"
-                      ? "bg-red-500/10 text-red-400 border-red-500/20"
-                      : "bg-white/5 text-white/40 border-white/10"
+                      ? "bg-red-50 text-red-600 border border-red-200"
+                      : "bg-gray-50 text-gray-500 border border-gray-200"
                 }`}
               >
                 {call.disposition || call.state}
@@ -86,7 +86,7 @@ export function RecentCalls({ calls, onClickToCall }: Props) {
 
               <button
                 onClick={() => onClickToCall(displayNumber)}
-                className="w-8 h-8 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-green-50 hover:bg-green-100 border border-green-200 text-[#2ecc71] flex items-center justify-center transition-colors"
                 title={`Call ${displayNumber}`}
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

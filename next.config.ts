@@ -6,6 +6,15 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [],
   },
+  async redirects() {
+    return [
+      {
+        source: "/cti-widget/app/widget.html",
+        destination: "/cti-widget",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

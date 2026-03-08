@@ -167,7 +167,6 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       setActiveCall(null);
       setRecentCalls((prev) => [event, ...prev].slice(0, 20));
 
-      // Show wrap-up panel after call ends
       if (endedCall) {
         const phone = endedCall.direction === "inbound" ? endedCall.fromNumber : endedCall.toNumber;
         const startMs = new Date(endedCall.startedAt).getTime();
@@ -252,11 +251,9 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   const handleDial = useCallback(
     async (number: string) => {
-      // Initiate actual Rainbow call if WebRTC is connected
       if (rbStatus === "connected") {
         await webrtc.makeCall(number);
       }
-      // Also create the CTI tracking event
       callAction("start", { number });
     },
     [callAction, rbStatus, webrtc]
@@ -271,7 +268,6 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
   const handleAnswer = useCallback(() => {
     if (activeCall) {
-      // Use local WebRTC SDK if connected, otherwise relay to /widget via BroadcastChannel
       if (rbStatus === "connected") {
         webrtc.answer();
       } else {
@@ -351,10 +347,10 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
   );
 
   const rbDotColor = {
-    disconnected: "bg-white/30",
-    connecting: "bg-yellow-400 animate-pulse",
-    connected: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]",
-    error: "bg-red-400",
+    disconnected: "bg-gray-400",
+    connecting: "bg-yellow-500 animate-pulse",
+    connected: "bg-[#2ecc71]",
+    error: "bg-red-500",
   }[rbStatus];
 
   const tabs = [
@@ -365,40 +361,40 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
   ];
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-sm mx-auto relative">
-      {/* Header — glass bar */}
-      <div className="flex items-center justify-between px-4 py-3 backdrop-blur-xl bg-white/5 border-b border-white/10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-blue-500/20">
+    <div className="flex flex-col h-screen w-full relative bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#006cff] text-white">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-white/20 flex items-center justify-center text-white text-xs font-bold">
             R
           </div>
-          <span className="text-sm font-semibold text-white/90 tracking-wide">Rainbow CTI</span>
+          <span className="text-sm font-semibold tracking-wide">Rainbow CTI</span>
         </div>
         <div className="relative">
           <button
             onClick={() => setShowRbPopup(!showRbPopup)}
-            className="flex items-center gap-2 hover:bg-white/5 rounded-full px-2.5 py-1.5 transition-colors"
+            className="flex items-center gap-2 hover:bg-white/10 rounded-md px-2 py-1 transition-colors"
           >
             <div className={`w-2 h-2 rounded-full ${rbDotColor}`} />
-            <span className="text-xs text-white/50 max-w-[120px] truncate">{agentEmail}</span>
+            <span className="text-xs text-white/80 max-w-[120px] truncate">{agentEmail}</span>
           </button>
 
-          {/* Rainbow login popup — glass */}
+          {/* Rainbow login popup */}
           {showRbPopup && (
             <div
               ref={popupRef}
-              className="absolute right-0 top-full mt-2 w-72 backdrop-blur-2xl bg-white/10 rounded-2xl border border-white/15 shadow-2xl shadow-black/40 z-50"
+              className="absolute right-0 top-full mt-2 w-72 bg-white rounded-lg border border-gray-200 shadow-lg z-50"
             >
               {rbStatus === "connected" ? (
                 <div className="p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                    <span className="text-sm text-white/80 font-medium">Connected</span>
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#2ecc71]" />
+                    <span className="text-sm text-gray-700 font-medium">Connected</span>
                   </div>
-                  <p className="text-xs text-white/40 mb-3 truncate">{rbLogin}</p>
+                  <p className="text-xs text-gray-400 mb-3 truncate">{rbLogin}</p>
                   <button
                     onClick={() => { disconnectRainbow(); setShowRbPopup(false); }}
-                    className="w-full py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-xl transition-colors border border-red-500/30"
+                    className="w-full py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors border border-red-200"
                   >
                     Disconnect
                   </button>
@@ -408,28 +404,28 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
                   onSubmit={(e) => { e.preventDefault(); connectRainbow(); }}
                   className="p-4 space-y-3"
                 >
-                  <p className="text-sm font-medium text-white/80">Rainbow Login</p>
+                  <p className="text-sm font-medium text-gray-700">Rainbow Login</p>
                   <input
                     type="email"
                     value={rbLogin}
                     onChange={(e) => setRbLogin(e.target.value)}
                     placeholder="Rainbow email"
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-blue-400/50 focus:border-blue-400/30"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#006cff]/30 focus:border-[#006cff]"
                   />
                   <input
                     type="password"
                     value={rbPassword}
                     onChange={(e) => setRbPassword(e.target.value)}
                     placeholder="Password"
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-blue-400/50 focus:border-blue-400/30"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#006cff]/30 focus:border-[#006cff]"
                   />
                   {rbError && (
-                    <p className="text-xs text-red-400">{rbError}</p>
+                    <p className="text-xs text-red-600">{rbError}</p>
                   )}
                   <button
                     type="submit"
                     disabled={rbStatus === "connecting" || !rbLogin.trim() || !rbPassword.trim()}
-                    className="w-full py-2 bg-blue-500/30 hover:bg-blue-500/40 disabled:bg-white/5 disabled:text-white/20 text-white text-sm font-medium rounded-xl transition-colors border border-blue-400/20"
+                    className="w-full py-2 bg-[#006cff] hover:bg-[#0047ff] disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-md transition-colors"
                   >
                     {rbStatus === "connecting" ? "Connecting..." : "Connect"}
                   </button>
@@ -444,35 +440,35 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={webrtc.audioRef} autoPlay style={{ display: "none" }} />
 
-      {/* Error banner — glass */}
+      {/* Error banner */}
       {error && (
-        <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 backdrop-blur-sm">
-          <p className="text-xs text-red-400">{error}</p>
+        <div className="px-4 py-2 bg-red-50 border-b border-red-200">
+          <p className="text-xs text-red-600">{error}</p>
           <button
             onClick={() => setError(null)}
-            className="text-xs text-red-400/60 hover:text-red-400 mt-0.5 transition-colors"
+            className="text-xs text-red-400 hover:text-red-600 mt-0.5 transition-colors"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Tab bar — glass */}
-      <div className="flex backdrop-blur-xl bg-white/5 border-b border-white/10">
+      {/* Tab bar */}
+      <div className="flex bg-white border-b border-gray-200">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-3 text-xs font-medium relative transition-all ${
+            className={`flex-1 py-2.5 text-xs font-medium relative transition-all ${
               tab === t.id
-                ? "text-white border-b-2 border-blue-400 bg-white/5"
-                : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                ? "text-[#006cff] border-b-2 border-[#006cff]"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
             }`}
           >
             <TabIcon name={t.icon} active={tab === t.id} />
             <span className="block mt-0.5">{t.label}</span>
             {"badge" in t && (t.badge ?? 0) > 0 && (
-              <span className="absolute top-1.5 right-1/4 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center shadow-lg shadow-red-500/40">
+              <span className="absolute top-1 right-1/4 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                 {t.badge}
               </span>
             )}
@@ -481,8 +477,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {/* Call wrap-up panel (shown after call ends) */}
+      <div className="flex-1 overflow-y-auto bg-[#f8f9fa]">
         {wrapUp && tab === "phone" && (
           <CallWrapUp
             correlationId={wrapUp.correlationId}
@@ -519,7 +514,7 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
 
 /** Minimal SVG tab icons */
 function TabIcon({ name, active }: { name: string; active: boolean }) {
-  const cls = `w-4 h-4 mx-auto ${active ? "text-blue-400" : "text-current"}`;
+  const cls = `w-4 h-4 mx-auto ${active ? "text-[#006cff]" : "text-current"}`;
   switch (name) {
     case "phone":
       return (
