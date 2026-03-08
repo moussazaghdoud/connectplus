@@ -333,6 +333,21 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     [callAction, rbStatus, webrtc]
   );
 
+  // Listen for click-to-call messages from Zoho PhoneBridge (via parent iframe)
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === "click_to_call" && e.data.number) {
+        const num = e.data.number.replace(/[^0-9+*#]/g, "");
+        if (num.length >= 3) {
+          console.log("[CTI] Click-to-call from Zoho:", num);
+          handleDial(num);
+        }
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [handleDial]);
+
   // BroadcastChannel to communicate with /widget tab for real Rainbow call control
   const channelRef = useRef<BroadcastChannel | null>(null);
   useEffect(() => {
