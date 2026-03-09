@@ -17,6 +17,8 @@ interface Props {
   agentId: string;
   agentEmail: string;
   tenantId: string;
+  zohoDialNumber?: string | null;
+  onZohoDialConsumed?: () => void;
 }
 
 interface ActiveCall {
@@ -37,7 +39,7 @@ interface ActiveCall {
   isOnHold: boolean;
 }
 
-export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
+export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, onZohoDialConsumed }: Props) {
   const [tab, setTab] = useState<Tab>("phone");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [recentCalls, setRecentCalls] = useState<CtiCallEvent[]>([]);
@@ -333,8 +335,18 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId }: Props) {
     [callAction, rbStatus, webrtc]
   );
 
-  // Listen for click-to-call from Zoho PhoneBridge via postMessage
-  // (widget.html wrapper catches Zoho Dial event and forwards here)
+  // Handle Zoho PhoneBridge click-to-call (passed as prop from page)
+  useEffect(() => {
+    if (!zohoDialNumber) return;
+    const cleaned = zohoDialNumber.replace(/[^0-9+*#]/g, "");
+    if (cleaned.length >= 3) {
+      console.log("[CTI] Zoho click-to-call:", cleaned);
+      handleDial(cleaned);
+    }
+    onZohoDialConsumed?.();
+  }, [zohoDialNumber, handleDial, onZohoDialConsumed]);
+
+  // Listen for click-to-call via postMessage (fallback for iframe wrapper)
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (e.data?.type === "click_to_call" && e.data.number) {
