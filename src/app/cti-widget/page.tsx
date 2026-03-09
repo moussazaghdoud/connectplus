@@ -39,19 +39,23 @@ export default function CtiWidgetPage() {
   const [dialNumber, setDialNumber] = useState<string | null>(null);
   const zohoInitialized = useRef(false);
 
-  // Load Zoho Embedded SDK and listen for PhoneBridge events
+  // Initialize Zoho Embedded SDK for PhoneBridge events
+  // SDK script is loaded via next/script in layout.tsx (beforeInteractive)
   useEffect(() => {
     if (zohoInitialized.current) return;
     zohoInitialized.current = true;
 
-    const script = document.createElement("script");
-    script.src = "https://live.zwidgets.com/js-sdk/1.2/ZohoEmbeddedApp.min.js";
-    script.onload = () => {
+    function initZoho() {
       try {
-        if (!window.ZOHO?.embeddedApp) return;
+        if (!window.ZOHO?.embeddedApp) {
+          console.warn("[CTI] Zoho SDK not available on window");
+          return;
+        }
+
+        console.log("[CTI] Zoho SDK found, registering events...");
 
         window.ZOHO.embeddedApp.on("PageLoad", (data) => {
-          console.log("[CTI] Zoho PageLoad:", data);
+          console.log("[CTI] Zoho PageLoad:", JSON.stringify(data));
         });
 
         // PhoneBridge: triggered when user clicks a phone number's Call icon in Zoho CRM
@@ -69,16 +73,30 @@ export default function CtiWidgetPage() {
         });
 
         window.ZOHO.embeddedApp.init()
-          .then(() => console.log("[CTI] Zoho SDK initialized"))
+          .then(() => console.log("[CTI] Zoho SDK initialized successfully"))
           .catch((err: unknown) => console.warn("[CTI] Zoho SDK init failed:", err));
       } catch (e) {
-        console.warn("[CTI] Zoho SDK not available:", e);
+        console.warn("[CTI] Zoho SDK error:", e);
       }
-    };
-    script.onerror = () => {
-      console.warn("[CTI] Failed to load Zoho SDK (not in Zoho CRM context)");
-    };
-    document.head.appendChild(script);
+    }
+
+    // SDK may already be loaded (beforeInteractive) or may need a moment
+    if (window.ZOHO?.embeddedApp) {
+      initZoho();
+    } else {
+      // Retry a few times in case script hasn't executed yet
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (window.ZOHO?.embeddedApp) {
+          clearInterval(interval);
+          initZoho();
+        } else if (attempts >= 20) {
+          clearInterval(interval);
+          console.warn("[CTI] Zoho SDK not found after 2s — not in Zoho CRM context?");
+        }
+      }, 100);
+    }
   }, []);
 
   // Clear dial number after it's been consumed
