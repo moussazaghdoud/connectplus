@@ -2,7 +2,7 @@
 
 ## Overview
 
-ConnectPlus is a **real-time CTI (Computer Telephony Integration) platform** built on Next.js + Rainbow CPaaS. It delivers screen-pop notifications for incoming calls, resolves callers against CRM connectors via a unified **CrmService**, logs calls to CRM systems, and writes call records back. Supports two modes: **S2S (notification-only)** and **WebRTC (full browser softphone)**. Includes **agent login (email+password)**, an **embeddable widget** at `/widget` for CRM iframe integration, and a **standalone CTI widget** at `/cti-widget` with full softphone UI featuring **glassmorphism design**.
+ConnectPlus is a **real-time CTI (Computer Telephony Integration) platform** built on Next.js + Rainbow CPaaS. It delivers screen-pop notifications for incoming calls, resolves callers against CRM connectors via a unified **CrmService**, logs calls to CRM systems, and writes call records back. Supports two modes: **S2S (notification-only)** and **WebRTC (full browser softphone)**. Includes **agent login (email+password)**, an **embeddable widget** at `/widget` for CRM iframe integration, and a **standalone CTI widget** at `/cti-widget` with full softphone UI matching **Zoho CRM-native design**. Features **auto-connect** (encrypted credential storage) and **Zoho PhoneBridge click-to-call** from CRM contact fields.
 
 **Production:** https://connectplus-production-0fbf.up.railway.app
 **Widget:** https://connectplus-production-0fbf.up.railway.app/widget
@@ -157,6 +157,7 @@ src/
 │   │   │   ├── login/route.ts                    # POST email+password login
 │   │   │   ├── logout/route.ts                   # POST destroy session
 │   │   │   ├── me/route.ts                       # GET current user
+│   │   │   ├── rainbow-credentials/route.ts      # GET/POST/DELETE Rainbow auto-connect creds
 │   │   │   ├── [connector]/route.ts              # OAuth start (any connector)
 │   │   │   └── [connector]/callback/route.ts     # OAuth callback (any connector)
 │   │   ├── interactions/route.ts                 # CRUD interactions
@@ -371,8 +372,20 @@ The CTI widget (`/cti-widget`) features a **Zoho CRM-native look and feel** — 
 - Compact dial pad fits within standard 400x600 widget container
 - Content area uses `overflow-hidden` / `min-h-0` for proper flex layout
 
-### Default Rainbow Password
-- Set to `Moussa.123` in `useState` initializer
+### Auto-Connect (Rainbow Credentials)
+- On first connect, user checks "Remember me" checkbox → credentials saved server-side
+- Credentials stored AES-256-GCM encrypted in `User.rainbowLogin` / `User.rainbowPassword` DB fields
+- API: `GET/POST/DELETE /api/v1/auth/rainbow-credentials` (session auth)
+- On widget load: fetches saved credentials → auto-connects to Rainbow without user interaction
+- Disconnect clears saved credentials (back to manual mode)
+- No hardcoded passwords — password field starts empty
+
+### Zoho PhoneBridge Click-to-Call
+- `widget.html` listens for `DialNumber` event from Zoho CRM Embedded SDK
+- When user clicks a phone number on any Zoho CRM record, event fires with the number
+- `widget.html` forwards via `postMessage({ type: 'click_to_call', number })` to CTI iframe
+- `CtiSoftphone.tsx` listens for `message` events, validates number, calls `handleDial()`
+- Requires updated `widget.zip` uploaded to Zoho Developer Portal
 
 ### Error Guards
 - `callAction()` skips if `agentId` is missing (prevents errors during deploy restarts)
@@ -413,7 +426,7 @@ The CTI widget (`/cti-widget`) features a **Zoho CRM-native look and feel** — 
 | Feature | S2S | WebRTC | Notes |
 |---------|-----|--------|-------|
 | Inbound calls (ringing/active/ended) | Yes | Yes | Full lifecycle |
-| Outbound calls (click-to-call) | 3PCC API | makePhoneCall | From DialPad, Contacts tab, RecentCalls |
+| Outbound calls (click-to-call) | 3PCC API | makePhoneCall | From DialPad, Contacts tab, RecentCalls, Zoho PhoneBridge |
 | Answer / Reject | Yes | Yes | call.answer() / call.release() |
 | Hangup | Yes | Yes | |
 | Mute / Unmute | Yes | Yes | callService.muteCall() |
@@ -483,7 +496,7 @@ The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 
 ### Widget Files (zoho-widget/)
 - `plugin-manifest.json` — Extension manifest: telephony widget, 400x600, `/app/widget.html`
-- `app/widget.html` — Iframe wrapper: loads Zoho Embedded SDK, iframes `/cti-widget`, light `#f8f9fa` background, handles `openCrmRecord` postMessage
+- `app/widget.html` — Iframe wrapper: loads Zoho Embedded SDK, iframes `/cti-widget`, handles `openCrmRecord` postMessage + `DialNumber` click-to-call
 - `widget.zip` — Packaged extension for upload
 
 ### Key Config
@@ -515,6 +528,9 @@ The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 - **Connect button disabled**: Changed Rainbow login from `type="email"` to `type="text"` to avoid HTML5 validation blocking the Connect button
 - **Missing required fields error**: Added guards in `callAction()` (skip if no agentId) and `handleDial()` (validate number) to prevent errors during Railway deploy restarts
 - **Zoho widget 404**: Base URL in Zoho extension included `/cti-widget` causing double path. Fixed by setting correct base URL or using redirects
+- **Hardcoded Rainbow password**: Removed `Moussa.123` default from CtiSoftphone state. Password field now starts empty; credentials saved server-side (encrypted) via "Remember me" for auto-connect
+- **No auto-connect**: Widget required manual click each time. Added auto-connect: saved credentials fetched on mount → Rainbow connects automatically
+- **No Zoho click-to-call**: Phone numbers in Zoho CRM records were not clickable for calling. Added PhoneBridge `DialNumber` listener in widget.html → forwards to CTI iframe → triggers outbound call
 
 ## Test Suite
 
