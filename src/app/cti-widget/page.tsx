@@ -51,14 +51,21 @@ export default function CtiWidgetPage() {
         if (!window.ZOHO?.embeddedApp) return;
 
         window.ZOHO.embeddedApp.on("PageLoad", (data) => {
-          console.log("[CTI] Zoho page context:", data);
+          console.log("[CTI] Zoho PageLoad:", data);
         });
 
-        // PhoneBridge: click-to-call from Zoho CRM contact fields
-        window.ZOHO.embeddedApp.on("DialNumber", (data) => {
-          const num = data.number || data.Number || data.phoneNumber;
-          console.log("[CTI] Zoho DialNumber event:", num, data);
+        // PhoneBridge: triggered when user clicks a phone number's Call icon in Zoho CRM
+        window.ZOHO.embeddedApp.on("Dial", (data) => {
+          console.log("[CTI] Zoho Dial event — full data:", JSON.stringify(data));
+          // Try all known field names since Zoho docs don't specify
+          const num = data.number || data.Number || data.phoneNumber
+            || data.phone || data.Phone || data.dialNumber || data.DialNumber;
+          console.log("[CTI] Zoho Dial extracted number:", num);
           if (num) setDialNumber(num);
+        });
+
+        window.ZOHO.embeddedApp.on("DialerActive", () => {
+          console.log("[CTI] Zoho DialerActive — softphone toggled");
         });
 
         window.ZOHO.embeddedApp.init()

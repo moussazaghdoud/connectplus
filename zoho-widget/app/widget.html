@@ -50,12 +50,20 @@
       });
 
       // PhoneBridge: click-to-call from Zoho CRM contact fields
-      ZOHO.embeddedApp.on('DialNumber', function (data) {
-        console.log('[ConnectPlus] DialNumber event:', data);
-        iframe.contentWindow.postMessage({
-          type: 'click_to_call',
-          number: data.number || data.Number || data.phoneNumber
-        }, '*');
+      ZOHO.embeddedApp.on('Dial', function (data) {
+        console.log('[ConnectPlus] Dial event:', JSON.stringify(data));
+        var num = data.number || data.Number || data.phoneNumber
+          || data.phone || data.Phone || data.dialNumber || data.DialNumber;
+        if (num) {
+          iframe.contentWindow.postMessage({
+            type: 'click_to_call',
+            number: num
+          }, '*');
+        }
+      });
+
+      ZOHO.embeddedApp.on('DialerActive', function () {
+        console.log('[ConnectPlus] DialerActive — softphone toggled');
       });
 
       ZOHO.embeddedApp.init()
