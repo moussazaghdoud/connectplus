@@ -7,13 +7,9 @@ const nextConfig: NextConfig = {
     remotePatterns: [],
   },
   async redirects() {
-    return [
-      {
-        source: "/cti-widget/app/widget.html",
-        destination: "/cti-widget",
-        permanent: false,
-      },
-    ];
+    // widget.html is now served as a static file from public/cti-widget/app/
+    // Zoho loads it directly → it iframes /cti-widget with Zoho SDK events
+    return [];
   },
   async headers() {
     return [

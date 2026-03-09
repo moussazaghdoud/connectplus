@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ConnectPlus CTI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #f8f9fa; }
+    iframe { width: 100%; height: 100%; border: none; outline: none; }
+    html { border: 2px solid #006cff; border-radius: 8px; }
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; font-family: 'Segoe UI', Roboto, sans-serif;
+      color: rgba(255,255,255,0.4); font-size: 14px;
+    }
+    .error {
+      display: none; padding: 20px; text-align: center;
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      color: #f87171; font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading" class="loading">Loading ConnectPlus...</div>
+  <div id="error" class="error"></div>
+  <iframe
+    id="connectplus"
+    src="https://connectplus-production-0fbf.up.railway.app/cti-widget"
+    allow="microphone; camera"
+    style="display:none;"
+  ></iframe>
+
+  <!-- Zoho CRM Embedded SDK -->
+  <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbeddedApp.min.js"></script>
+  <script>
+    var iframe = document.getElementById('connectplus');
+    var loading = document.getElementById('loading');
+    var errorDiv = document.getElementById('error');
+
+    // Initialize Zoho CRM Embedded App SDK
+    try {
+      ZOHO.embeddedApp.on('PageLoad', function (data) {
+        console.log('[ConnectPlus] Zoho page context:', data);
+        iframe.contentWindow.postMessage({
+          type: 'zoho_context',
+          entity: data.Entity,
+          entityId: data.EntityId
+        }, '*');
+      });
+
+      // PhoneBridge: click-to-call from Zoho CRM contact fields
+      ZOHO.embeddedApp.on('Dial', function (data) {
+        console.log('[ConnectPlus] Dial event:', JSON.stringify(data));
+        var num = data.number || data.Number || data.phoneNumber
+          || data.phone || data.Phone || data.dialNumber || data.DialNumber;
+        if (num) {
+          iframe.contentWindow.postMessage({
+            type: 'click_to_call',
+            number: num
+          }, '*');
+        }
+      });
+
+      ZOHO.embeddedApp.on('DialerActive', function () {
+        console.log('[ConnectPlus] DialerActive — softphone toggled');
+      });
+
+      ZOHO.embeddedApp.init()
+        .then(function () {
+          console.log('[ConnectPlus] Zoho CRM SDK initialized');
+          showWidget();
+        })
+        .catch(function (err) {
+          console.warn('[ConnectPlus] Zoho SDK init failed:', err);
+          showWidget();
+        });
+    } catch (e) {
+      console.warn('[ConnectPlus] Zoho SDK not available (testing outside Zoho)');
+      showWidget();
+    }
+
+    function showWidget() {
+      iframe.style.display = 'block';
+      loading.style.display = 'none';
+    }
+
+    // Listen for messages from ConnectPlus (e.g. open CRM record)
+    window.addEventListener('message', function (event) {
+      if (!event.data || !event.data.type) return;
+
+      if (event.data.type === 'openCrmRecord') {
+        // Navigate Zoho CRM to the contact/lead record
+        ZOHO.CRM.UI.Record.open({
+          Entity: event.data.module || 'Contacts',
+          RecordID: event.data.recordId
+        }).catch(function () {});
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,30 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import { CtiSoftphone } from "@/components/cti-widget/CtiSoftphone";
-
-/* global ZOHO */
-declare global {
-  interface Window {
-    ZOHO?: {
-      embeddedApp: {
-        on: (event: string, callback: (data: Record<string, string>) => void) => void;
-        init: () => Promise<void>;
-      };
-      CRM?: {
-        UI?: {
-          Record?: {
-            open: (opts: { Entity: string; RecordID: string }) => Promise<void>;
-          };
-        };
-      };
-    };
-  }
-}
 
 /**
  * CTI Widget page — embedded inside Zoho CRM (or any CRM iframe).
- * Loads Zoho Embedded SDK for PhoneBridge click-to-call support.
+ * Zoho SDK runs in the static widget.html wrapper which forwards
+ * PhoneBridge click-to-call events via postMessage to this page.
  * Authenticates via session cookie, then renders the softphone.
  */
 export default function CtiWidgetPage() {
@@ -36,73 +18,6 @@ export default function CtiWidgetPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dialNumber, setDialNumber] = useState<string | null>(null);
-  const zohoInitialized = useRef(false);
-
-  // Initialize Zoho Embedded SDK for PhoneBridge events
-  // SDK script is loaded via next/script in layout.tsx (beforeInteractive)
-  useEffect(() => {
-    if (zohoInitialized.current) return;
-    zohoInitialized.current = true;
-
-    function initZoho() {
-      try {
-        if (!window.ZOHO?.embeddedApp) {
-          console.warn("[CTI] Zoho SDK not available on window");
-          return;
-        }
-
-        console.log("[CTI] Zoho SDK found, registering events...");
-
-        window.ZOHO.embeddedApp.on("PageLoad", (data) => {
-          console.log("[CTI] Zoho PageLoad:", JSON.stringify(data));
-        });
-
-        // PhoneBridge: triggered when user clicks a phone number's Call icon in Zoho CRM
-        window.ZOHO.embeddedApp.on("Dial", (data) => {
-          console.log("[CTI] Zoho Dial event — full data:", JSON.stringify(data));
-          // Try all known field names since Zoho docs don't specify
-          const num = data.number || data.Number || data.phoneNumber
-            || data.phone || data.Phone || data.dialNumber || data.DialNumber;
-          console.log("[CTI] Zoho Dial extracted number:", num);
-          if (num) setDialNumber(num);
-        });
-
-        window.ZOHO.embeddedApp.on("DialerActive", () => {
-          console.log("[CTI] Zoho DialerActive — softphone toggled");
-        });
-
-        window.ZOHO.embeddedApp.init()
-          .then(() => console.log("[CTI] Zoho SDK initialized successfully"))
-          .catch((err: unknown) => console.warn("[CTI] Zoho SDK init failed:", err));
-      } catch (e) {
-        console.warn("[CTI] Zoho SDK error:", e);
-      }
-    }
-
-    // SDK may already be loaded (beforeInteractive) or may need a moment
-    if (window.ZOHO?.embeddedApp) {
-      initZoho();
-    } else {
-      // Retry a few times in case script hasn't executed yet
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (window.ZOHO?.embeddedApp) {
-          clearInterval(interval);
-          initZoho();
-        } else if (attempts >= 20) {
-          clearInterval(interval);
-          console.warn("[CTI] Zoho SDK not found after 2s — not in Zoho CRM context?");
-        }
-      }, 100);
-    }
-  }, []);
-
-  // Clear dial number after it's been consumed
-  const onDialNumberConsumed = useCallback(() => {
-    setDialNumber(null);
-  }, []);
 
   useEffect(() => {
     async function checkAuth() {
@@ -154,8 +69,6 @@ export default function CtiWidgetPage() {
       agentId={user.id}
       agentEmail={user.email}
       tenantId={user.tenantId}
-      zohoDialNumber={dialNumber}
-      onZohoDialConsumed={onDialNumberConsumed}
     />
   );
 }
