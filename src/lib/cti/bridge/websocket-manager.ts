@@ -192,6 +192,33 @@ export function broadcastScreenPop(
 }
 
 /**
+ * Broadcast a click-to-dial event to all subscribers for a tenant.
+ */
+export function broadcastClickToDial(
+  tenantId: string,
+  data: { number: string }
+): number {
+  const subs = getSubscribers();
+  let sent = 0;
+  const dead: string[] = [];
+
+  for (const [id, sub] of subs) {
+    if (sub.tenantId !== tenantId) continue;
+    const ok = sendSSE(sub.controller, "click_to_dial", data);
+    if (ok) sent++;
+    else dead.push(id);
+  }
+
+  for (const id of dead) subs.delete(id);
+
+  if (sent > 0) {
+    log.info({ number: data.number, sent }, "Click-to-dial broadcast");
+  }
+
+  return sent;
+}
+
+/**
  * Get subscriber count for a tenant.
  */
 export function getSubscriberCount(tenantId: string): number {

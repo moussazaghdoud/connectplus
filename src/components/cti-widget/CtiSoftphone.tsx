@@ -285,6 +285,14 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, on
       setScreenPop(data);
     });
 
+    es.addEventListener("click_to_dial", (e) => {
+      const data = JSON.parse(e.data);
+      console.log("[CTI] click_to_dial received:", data);
+      if (data.number) {
+        handleDial(data.number);
+      }
+    });
+
     es.addEventListener("heartbeat", () => {
       setConnected(true);
     });
