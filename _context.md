@@ -2,7 +2,7 @@
 
 ## Overview
 
-ConnectPlus is a **real-time CTI (Computer Telephony Integration) platform** built on Next.js + Rainbow CPaaS. It delivers screen-pop notifications for incoming calls, resolves callers against CRM connectors via a unified **CrmService**, logs calls to CRM systems, and writes call records back. Supports two modes: **S2S (notification-only)** and **WebRTC (full browser softphone)**. Includes **agent login (email+password)**, an **embeddable widget** at `/widget` for CRM iframe integration, and a **standalone CTI widget** at `/cti-widget` with full softphone UI matching **Zoho CRM-native design**. Features **auto-connect** (encrypted credential storage) and **Zoho PhoneBridge click-to-call** from CRM contact fields.
+ConnectPlus is a **real-time CTI (Computer Telephony Integration) platform** built on Next.js + Rainbow CPaaS. It delivers screen-pop notifications for incoming calls, resolves callers against CRM connectors via a unified **CrmService**, logs calls to CRM systems, and writes call records back. Supports two modes: **S2S (notification-only)** and **WebRTC (full browser softphone)**. Includes **agent login (email+password)**, an **embeddable widget** at `/widget` for CRM iframe integration, and a **standalone CTI widget** at `/cti-widget` with full softphone UI matching **Zoho CRM-native design**. Features **auto-connect** (encrypted credential storage), **native Zoho PhoneBridge click-to-call** via postMessage (no SDK dependency), **auto-maximize widget on call start**, and a **close (X) button** to minimize the widget panel.
 
 **Production:** https://connectplus-production-0fbf.up.railway.app
 **Widget:** https://connectplus-production-0fbf.up.railway.app/widget
@@ -146,8 +146,8 @@ src/
 │   │   ├── WidgetShell.tsx                       # Main widget client component
 │   │   └── CallHistory.tsx                       # Recent calls list
 │   ├── cti-widget/
-│   │   ├── layout.tsx                            # Dark gradient bg for glassmorphism
-│   │   └── page.tsx                              # CTI softphone widget (session auth)
+│   │   ├── layout.tsx                            # Minimal layout for CRM iframe embedding
+│   │   └── page.tsx                              # CTI widget page: native Zoho postMessage handshake + auth
 │   ├── agent/page.tsx                            # Legacy agent UI (API key auth)
 │   ├── admin/connectors/                         # Connector marketplace UI
 │   │   ├── page.tsx                              # Connector grid with search/filter
@@ -172,6 +172,7 @@ src/
 │   │   │   ├── stream/route.ts                   # CTI SSE endpoint (cti-widget)
 │   │   │   ├── events/route.ts                   # CTI webhook receiver (HMAC)
 │   │   │   ├── call/                             # Call control endpoints
+│   │   │   ├── click-to-dial/route.ts             # POST click-to-dial (server-side fallback, SSE broadcast)
 │   │   │   ├── call-notes/route.ts               # POST/GET agent wrap-up notes
 │   │   │   └── diagnostics/route.ts              # GET call logging diagnostics
 │   │   ├── webhooks/[connector]/route.ts         # Connector webhooks
@@ -189,7 +190,7 @@ src/
 ├── components/
 │   ├── screen-pop/                               # Legacy agent UI components
 │   ├── cti-widget/                               # CTI softphone components (glassmorphism)
-│   │   ├── CtiSoftphone.tsx                      # Main softphone (4 tabs, SVG icons, glass header)
+│   │   ├── CtiSoftphone.tsx                      # Main softphone (4 tabs, SVG icons, close button, auto-maximize)
 │   │   ├── DialPad.tsx                           # Glass dial pad + emerald call button
 │   │   ├── ActiveCallPanel.tsx                   # Glass call controls (SVG icons, glow effects)
 │   │   ├── ContactSearch.tsx                     # Glass search + multi-phone click-to-call
@@ -380,12 +381,37 @@ The CTI widget (`/cti-widget`) features a **Zoho CRM-native look and feel** — 
 - Disconnect clears saved credentials (back to manual mode)
 - No hardcoded passwords — password field starts empty
 
-### Zoho PhoneBridge Click-to-Call
-- `widget.html` listens for `DialNumber` event from Zoho CRM Embedded SDK
-- When user clicks a phone number on any Zoho CRM record, event fires with the number
-- `widget.html` forwards via `postMessage({ type: 'click_to_call', number })` to CTI iframe
-- `CtiSoftphone.tsx` listens for `message` events, validates number, calls `handleDial()`
-- Requires updated `widget.zip` uploaded to Zoho Developer Portal
+### Zoho PhoneBridge Integration (Native postMessage — No SDK)
+
+The Zoho Embedded App SDK (`ZohoEmbededAppSDK.min.js`) doesn't initialize for externally-hosted widgets — the `ZOHO` global object never gets created. By reverse-engineering the SDK source code, we replicate the handshake protocol natively via `postMessage`:
+
+**Handshake Protocol:**
+1. Widget sends `{type: "SDK.EVENT", eventName: "REGISTER", appOrigin: ...}` to `window.parent` using `serviceOrigin` from iframe URL query params (Zoho adds this automatically)
+2. Zoho responds with `{type: "FRAMEWORK.EVENT", eventName: "SET_CONTEXT", data: {uniqueID: "widgetTelephony", ...}}`
+3. After registration, Zoho sends `FRAMEWORK.EVENT` messages for `Dial`, `DialerActive`, `PageLoad`, etc.
+
+**Click-to-Call:**
+- When user clicks a phone number on any Zoho CRM record, Zoho sends `{type: "FRAMEWORK.EVENT", eventName: "Dial", data: {number: "..."}}`
+- `page.tsx` extracts the number, passes it to `CtiSoftphone` via `zohoDialNumber` prop
+- `CtiSoftphone` calls `handleDial()` which initiates the outbound call via Rainbow WebRTC
+
+**Auto-Maximize Widget on Call Start:**
+- When a call starts (inbound ringing or outbound dial), the widget sends `{type: "SDK.EVENT", eventName: "CRM_EVENT", data: {category: "UI", action: {telephony: "MAXIMIZE"}}}` to Zoho parent
+- This replicates `ZOHO.CRM.UI.Dialer.maximize()` — tells Zoho CRM to open the telephony panel
+- Also sends `NOTIFY` as a fallback to flash the telephony icon
+- Messages include `promiseid` and `uniqueID` matching the SDK's expected format
+
+**Close (X) Button — Widget Minimize:**
+- Close icon (X) in top-right corner of widget header
+- Sends `{category: "UI", action: {telephony: "MINIMIZE"}}` via same postMessage protocol
+- Allows user to dismiss the widget without finding the phone icon in Zoho's bottom toolbar
+
+**Key Discovery:** Zoho communicates with telephony widgets exclusively via `postMessage` with format `{type: "FRAMEWORK.EVENT", eventName: "...", data: {...}, uniqueID: "widgetTelephony"}`. The SDK is just a thin wrapper around this — zero external scripts needed.
+
+### Widget Controls
+- **Close (X) button**: Top-right corner of header, sends MINIMIZE to Zoho parent via postMessage
+- **Auto-maximize**: Widget panel auto-opens on inbound ringing or outbound dial
+- **Rainbow status dot**: Green (connected), yellow pulse (connecting), gray (disconnected), red (error)
 
 ### Error Guards
 - `callAction()` skips if `agentId` is missing (prevents errors during deploy restarts)
@@ -426,7 +452,7 @@ The CTI widget (`/cti-widget`) features a **Zoho CRM-native look and feel** — 
 | Feature | S2S | WebRTC | Notes |
 |---------|-----|--------|-------|
 | Inbound calls (ringing/active/ended) | Yes | Yes | Full lifecycle |
-| Outbound calls (click-to-call) | 3PCC API | makePhoneCall | From DialPad, Contacts tab, RecentCalls, Zoho PhoneBridge |
+| Outbound calls (click-to-call) | 3PCC API | makePhoneCall | From DialPad, Contacts tab, RecentCalls, Zoho PhoneBridge (native postMessage) |
 | Answer / Reject | Yes | Yes | call.answer() / call.release() |
 | Hangup | Yes | Yes | |
 | Mute / Unmute | Yes | Yes | callService.muteCall() |
@@ -482,8 +508,7 @@ The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 2. **Call Center Name**: Rainbow Widget
 3. **Base URL**: Auto-filled from Connected App config (cannot be changed after creation)
 4. **Resource path**: `/cti-widget` (appended to base URL)
-5. Next.js `redirects()` in `next.config.ts` redirects `/cti-widget/app/widget.html` → `/cti-widget`
-6. `headers()` with `frame-ancestors *` CSP allows Zoho to iframe the widget
+5. `headers()` in `next.config.ts` with `frame-ancestors *` CSP allows Zoho to iframe the widget
 7. Result: Phone icon in bottom-right of Zoho CRM → opens CTI softphone panel
 
 ### Setup Guide (from scratch)
@@ -492,17 +517,18 @@ The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 3. Go to **Telephony** sidebar → set resource path `/cti-widget`
 4. **Test your Extension** → installs to sandbox/production org
 5. **Publish** (private) → installs to production CRM
-6. Phone icon appears in Zoho CRM bottom-right toolbar
+6. Phone icon appears in Zoho CRM bottom-right toolbar → opens CTI widget with native postMessage handshake
 
 ### Widget Files (zoho-widget/)
 - `plugin-manifest.json` — Extension manifest: telephony widget, 400x600, `/app/widget.html`
-- `app/widget.html` — Iframe wrapper: loads Zoho Embedded SDK, iframes `/cti-widget`, handles `openCrmRecord` postMessage + `DialNumber` click-to-call
+- `app/widget.html` — Iframe wrapper (legacy, not actively used — Zoho loads `/cti-widget` directly)
 - `widget.zip` — Packaged extension for upload
+- **Note:** The Zoho extension loads `/cti-widget` directly as the telephony resource path. All PhoneBridge communication happens via native postMessage in `page.tsx` — no SDK, no widget.html intermediary.
 
 ### Key Config
-- `next.config.ts` has `redirects()` for `/cti-widget/app/widget.html` → `/cti-widget`
 - `next.config.ts` has `headers()` with `frame-ancestors *` CSP for `/cti-widget` routes
-- Zoho Embedded SDK: `https://live.zwidgets.com/js-sdk/1.2/ZohoEmbeddedApp.min.js`
+- **No Zoho SDK dependency** — handshake replicated natively via postMessage (SDK at `https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js` was reverse-engineered but not loaded)
+- Zoho adds `?serviceOrigin=<encoded_origin>` to the iframe URL — this is used for postMessage targeting
 - Rainbow logo: `public/rainbow-logo.png` (displayed in widget header)
 
 ## Known Issues & Fixes Applied
@@ -530,7 +556,10 @@ The CTI softphone is embedded via Zoho's PhoneBridge Telephony integration:
 - **Zoho widget 404**: Base URL in Zoho extension included `/cti-widget` causing double path. Fixed by setting correct base URL or using redirects
 - **Hardcoded Rainbow password**: Removed `Moussa.123` default from CtiSoftphone state. Password field now starts empty; credentials saved server-side (encrypted) via "Remember me" for auto-connect
 - **No auto-connect**: Widget required manual click each time. Added auto-connect: saved credentials fetched on mount → Rainbow connects automatically
-- **No Zoho click-to-call**: Phone numbers in Zoho CRM records were not clickable for calling. Added PhoneBridge `DialNumber` listener in widget.html → forwards to CTI iframe → triggers outbound call
+- **No Zoho click-to-call**: Phone numbers in Zoho CRM records were not clickable for calling. Initially tried Zoho SDK (never initializes for external widgets), then server-side PhoneBridge API (too complex for users). Final solution: native postMessage handshake replicating the SDK's REGISTER protocol → Zoho sends Dial events with phone number → triggers outbound call. Zero user setup required.
+- **Zoho SDK doesn't work for external widgets**: `ZOHO` global object never created when widget is hosted outside Zoho. Root cause: SDK relies on `ZSDK` class which uses `serviceOrigin` query param for cross-domain postMessage — works internally but `ZOHO.embeddedApp.init()` fails silently for external URLs. Solved by replicating the postMessage protocol directly.
+- **Widget panel doesn't auto-open on call**: Added `ZOHO.CRM.UI.Dialer.maximize()` equivalent via postMessage (`{category: "UI", action: {telephony: "MAXIMIZE"}}`) — sent on inbound ringing and outbound dial
+- **No way to close widget without phone icon**: Added close (X) button in widget header that sends MINIMIZE command to Zoho CRM via postMessage
 
 ## Test Suite
 
