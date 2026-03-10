@@ -31,6 +31,32 @@ export default function CtiWidgetPage() {
   const zohoUniqueID = useRef<string | null>(null);
   const zohoServiceOrigin = useRef<string | null>(null);
 
+  // Send a CRM_EVENT to Zoho parent (replicates SDK's TriggerEvent)
+  const sendZohoEvent = useCallback((eventName: string, data: any) => {
+    if (!zohoServiceOrigin.current || !zohoUniqueID.current) return;
+    const msg = {
+      type: "SDK.EVENT",
+      eventName,
+      uniqueID: zohoUniqueID.current,
+      time: Date.now(),
+      data,
+      appOrigin: encodeURIComponent(
+        window.location.protocol + "//" + window.location.host + window.location.pathname
+      ),
+    };
+    window.parent.postMessage(msg, zohoServiceOrigin.current);
+  }, []);
+
+  // Tell Zoho to maximize (open) the telephony widget panel
+  const maximizeWidget = useCallback(() => {
+    console.log("[CTI] Requesting Zoho to maximize widget");
+    sendZohoEvent("CRM_EVENT", {
+      category: "UI",
+      action: { telephony: "MAXIMIZE" },
+      sdkVersion: "1",
+    });
+  }, [sendZohoEvent]);
+
   // Native Zoho PhoneBridge postMessage integration
   useEffect(() => {
     if (zohoRegistered.current) return;
@@ -171,6 +197,7 @@ export default function CtiWidgetPage() {
       tenantId={user.tenantId}
       zohoDialNumber={dialNumber}
       onZohoDialConsumed={onDialNumberConsumed}
+      onCallStarted={maximizeWidget}
     />
   );
 }

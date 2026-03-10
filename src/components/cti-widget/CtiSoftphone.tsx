@@ -19,6 +19,7 @@ interface Props {
   tenantId: string;
   zohoDialNumber?: string | null;
   onZohoDialConsumed?: () => void;
+  onCallStarted?: () => void;
 }
 
 interface ActiveCall {
@@ -39,7 +40,7 @@ interface ActiveCall {
   isOnHold: boolean;
 }
 
-export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, onZohoDialConsumed }: Props) {
+export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, onZohoDialConsumed, onCallStarted }: Props) {
   const [tab, setTab] = useState<Tab>("phone");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [recentCalls, setRecentCalls] = useState<CtiCallEvent[]>([]);
@@ -233,6 +234,10 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, on
         isOnHold: event.state === "held",
       });
       setTab("active");
+      // Ask Zoho to open the widget panel so the user can see/control the call
+      if (event.state === "ringing") {
+        onCallStarted?.();
+      }
     } else if (event.state === "ended" || event.state === "missed" || event.state === "failed") {
       const endedCall = activeCallRef.current;
       setActiveCall(null);
@@ -335,12 +340,14 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, on
     async (number: string) => {
       const cleaned = number?.replace(/[^0-9+*#]/g, "");
       if (!cleaned || cleaned.length < 3) return;
+      // Ask Zoho to open the widget panel for the outbound call
+      onCallStarted?.();
       if (rbStatus === "connected") {
         await webrtc.makeCall(cleaned);
       }
       callAction("start", { number: cleaned });
     },
-    [callAction, rbStatus, webrtc]
+    [callAction, rbStatus, webrtc, onCallStarted]
   );
 
   // Handle Zoho PhoneBridge click-to-call (passed as prop from page)
