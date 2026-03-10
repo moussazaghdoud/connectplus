@@ -76,6 +76,16 @@ export default function CtiWidgetPage() {
     });
   }, [sendZohoEvent]);
 
+  // Tell Zoho to minimize (close) the telephony widget panel
+  const minimizeWidget = useCallback(() => {
+    console.log("[CTI] Requesting Zoho to MINIMIZE widget");
+    sendZohoEvent("CRM_EVENT", {
+      category: "UI",
+      action: { telephony: "MINIMIZE" },
+      sdkVersion: "1",
+    });
+  }, [sendZohoEvent]);
+
   // Native Zoho PhoneBridge postMessage integration
   useEffect(() => {
     if (zohoRegistered.current) return;
@@ -217,6 +227,7 @@ export default function CtiWidgetPage() {
       zohoDialNumber={dialNumber}
       onZohoDialConsumed={onDialNumberConsumed}
       onCallStarted={maximizeWidget}
+      onMinimize={minimizeWidget}
     />
   );
 }

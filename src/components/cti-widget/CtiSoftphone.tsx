@@ -20,6 +20,7 @@ interface Props {
   zohoDialNumber?: string | null;
   onZohoDialConsumed?: () => void;
   onCallStarted?: () => void;
+  onMinimize?: () => void;
 }
 
 interface ActiveCall {
@@ -40,7 +41,7 @@ interface ActiveCall {
   isOnHold: boolean;
 }
 
-export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, onZohoDialConsumed, onCallStarted }: Props) {
+export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, onZohoDialConsumed, onCallStarted, onMinimize }: Props) {
   const [tab, setTab] = useState<Tab>("phone");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [recentCalls, setRecentCalls] = useState<CtiCallEvent[]>([]);
@@ -491,7 +492,8 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, on
           <img src="/rainbow-logo.png" alt="Rainbow" className="w-7 h-7 rounded-md" />
           <span className="text-sm font-semibold tracking-wide">Rainbow CTI</span>
         </div>
-        <div className="relative">
+        <div className="flex items-center gap-1">
+          <div className="relative">
           <button
             onClick={() => setShowRbPopup(!showRbPopup)}
             className="flex items-center gap-2 hover:bg-white/10 rounded-md px-2 py-1 transition-colors"
@@ -563,6 +565,19 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, on
                 </form>
               )}
             </div>
+          )}
+        </div>
+          {/* Close / minimize widget button */}
+          {onMinimize && (
+            <button
+              onClick={onMinimize}
+              className="hover:bg-white/10 rounded-md p-1 transition-colors ml-1"
+              title="Close widget"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           )}
         </div>
       </div>
