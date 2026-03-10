@@ -346,9 +346,15 @@ export function CtiSoftphone({ agentId, agentEmail, tenantId, zohoDialNumber, on
     onZohoDialConsumed?.();
   }, [zohoDialNumber, handleDial, onZohoDialConsumed]);
 
-  // Listen for click-to-call via postMessage (fallback for iframe wrapper)
+  // Listen for ALL postMessage events (debug + click-to-call)
   useEffect(() => {
     const handler = (e: MessageEvent) => {
+      // Log ALL messages from parent (Zoho CRM) for debugging
+      if (e.source === window.parent && e.source !== window) {
+        console.log("[CTI] postMessage from parent:", JSON.stringify(e.data));
+      }
+
+      // Handle click-to-call from widget.html wrapper
       if (e.data?.type === "click_to_call" && e.data.number) {
         const num = e.data.number.replace(/[^0-9+*#]/g, "");
         if (num.length >= 3) {
