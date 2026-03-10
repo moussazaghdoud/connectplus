@@ -31,28 +31,47 @@ export default function CtiWidgetPage() {
   const zohoUniqueID = useRef<string | null>(null);
   const zohoServiceOrigin = useRef<string | null>(null);
 
-  // Send a CRM_EVENT to Zoho parent (replicates SDK's TriggerEvent)
-  const sendZohoEvent = useCallback((eventName: string, data: any) => {
-    if (!zohoServiceOrigin.current || !zohoUniqueID.current) return;
+  const promiseCounter = useRef(100);
+
+  // Send a SDK.EVENT to Zoho parent (replicates SDK's TriggerEvent)
+  const sendZohoEvent = useCallback((eventName: string, data: any, needsPromise = true) => {
+    if (!zohoServiceOrigin.current) {
+      console.log("[CTI] sendZohoEvent skipped — no serviceOrigin");
+      return;
+    }
+    if (!zohoUniqueID.current) {
+      console.log("[CTI] sendZohoEvent skipped — no uniqueID (handshake incomplete)");
+      return;
+    }
+    const promiseid = needsPromise ? `Promise${promiseCounter.current++}` : undefined;
     const msg = {
       type: "SDK.EVENT",
       eventName,
       uniqueID: zohoUniqueID.current,
       time: Date.now(),
+      promiseid,
       data,
       appOrigin: encodeURIComponent(
         window.location.protocol + "//" + window.location.host + window.location.pathname
       ),
     };
+    console.log("[CTI] Sending to Zoho:", JSON.stringify(msg));
     window.parent.postMessage(msg, zohoServiceOrigin.current);
   }, []);
 
   // Tell Zoho to maximize (open) the telephony widget panel
   const maximizeWidget = useCallback(() => {
-    console.log("[CTI] Requesting Zoho to maximize widget");
+    console.log("[CTI] Requesting Zoho to MAXIMIZE + NOTIFY widget");
+    // MAXIMIZE — opens the telephony panel
     sendZohoEvent("CRM_EVENT", {
       category: "UI",
       action: { telephony: "MAXIMIZE" },
+      sdkVersion: "1",
+    });
+    // NOTIFY — flashes the telephony icon as a fallback
+    sendZohoEvent("CRM_EVENT", {
+      category: "UI",
+      action: { telephony: "NOTIFY" },
       sdkVersion: "1",
     });
   }, [sendZohoEvent]);
