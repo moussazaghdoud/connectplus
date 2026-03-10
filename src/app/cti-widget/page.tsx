@@ -4,16 +4,18 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { CtiSoftphone } from "@/components/cti-widget/CtiSoftphone";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-declare global {
-  interface Window {
-    ZOHO?: any;
-  }
-}
 
 /**
  * CTI Widget page — embedded inside Zoho CRM (or any CRM iframe).
- * Zoho SDK loaded via next/script in layout.tsx (afterInteractive).
- * Polls for ZOHO global, registers Dial event, forwards to CtiSoftphone.
+ *
+ * Instead of relying on the Zoho Embedded App SDK (which doesn't initialize
+ * for externally-hosted widgets), we replicate the SDK's postMessage handshake
+ * natively. The protocol is:
+ *
+ * 1. Widget sends {type:"SDK.EVENT", eventName:"REGISTER", appOrigin:...}
+ *    to window.parent using the serviceOrigin from the iframe URL query params.
+ * 2. Zoho responds with {type:"FRAMEWORK.EVENT", eventName:"SET_CONTEXT", data:{uniqueID:...}}
+ * 3. After init, Zoho sends FRAMEWORK.EVENT messages for Dial, DialerActive, PageLoad, etc.
  */
 export default function CtiWidgetPage() {
   const [user, setUser] = useState<{
@@ -25,56 +27,92 @@ export default function CtiWidgetPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialNumber, setDialNumber] = useState<string | null>(null);
-  const zohoInitialized = useRef(false);
+  const zohoRegistered = useRef(false);
+  const zohoUniqueID = useRef<string | null>(null);
+  const zohoServiceOrigin = useRef<string | null>(null);
 
-  // Poll for Zoho SDK and register PhoneBridge events
+  // Native Zoho PhoneBridge postMessage integration
   useEffect(() => {
-    if (zohoInitialized.current) return;
+    if (zohoRegistered.current) return;
 
-    let attempts = 0;
-    const maxAttempts = 50; // 5 seconds
+    // Extract serviceOrigin from URL query params (Zoho adds this to the iframe URL)
+    const params = new URLSearchParams(window.location.search);
+    const serviceOrigin = params.get("serviceOrigin");
 
-    const interval = setInterval(() => {
-      attempts++;
+    if (!serviceOrigin) {
+      console.log("[CTI] No serviceOrigin in URL — not embedded in Zoho CRM");
+      return;
+    }
 
-      if (window.ZOHO?.embeddedApp && !zohoInitialized.current) {
-        zohoInitialized.current = true;
-        clearInterval(interval);
+    const decodedOrigin = decodeURIComponent(serviceOrigin);
+    zohoServiceOrigin.current = decodedOrigin;
+    console.log("[CTI] Zoho serviceOrigin:", decodedOrigin);
 
-        console.log("[CTI] Zoho SDK detected, registering events...");
+    // Listen for messages from Zoho parent
+    const handler = (e: MessageEvent) => {
+      // Only process messages from the Zoho parent
+      if (e.source !== window.parent || e.source === window) return;
 
-        try {
-          window.ZOHO.embeddedApp.on("PageLoad", function (data: any) {
-            console.log("[CTI] Zoho PageLoad:", JSON.stringify(data));
-          });
-
-          window.ZOHO.embeddedApp.on("Dial", function (data: any) {
-            console.log("[CTI] Zoho Dial event — full data:", JSON.stringify(data));
-            // Try every possible field name
-            const num = data?.number || data?.Number || data?.phoneNumber
-              || data?.phone || data?.Phone || data?.dialNumber || data?.DialNumber
-              || data?.dialedNumber || data?.DialedNumber;
-            console.log("[CTI] Zoho Dial extracted number:", num);
-            if (num) setDialNumber(num);
-          });
-
-          window.ZOHO.embeddedApp.on("DialerActive", function () {
-            console.log("[CTI] Zoho DialerActive — softphone toggled");
-          });
-
-          window.ZOHO.embeddedApp.init()
-            .then(function () { console.log("[CTI] Zoho SDK initialized OK"); })
-            .catch(function (err: any) { console.warn("[CTI] Zoho SDK init error:", err); });
-        } catch (e) {
-          console.warn("[CTI] Zoho SDK registration error:", e);
-        }
-      } else if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        console.log("[CTI] Zoho SDK not found after 5s (not in Zoho CRM?)");
+      let msg: any;
+      try {
+        msg = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+      } catch {
+        return;
       }
-    }, 100);
 
-    return () => clearInterval(interval);
+      if (msg?.type !== "FRAMEWORK.EVENT") return;
+
+      console.log("[CTI] Zoho event:", msg.eventName, JSON.stringify(msg.data));
+
+      switch (msg.eventName) {
+        case "SET_CONTEXT":
+          // Handshake complete — save uniqueID for future messages
+          zohoUniqueID.current = msg.data?.uniqueID || null;
+          zohoRegistered.current = true;
+          console.log("[CTI] Zoho handshake complete, uniqueID:", zohoUniqueID.current);
+          break;
+
+        case "Dial": {
+          // Click-to-call from Zoho CRM
+          const data = msg.data || {};
+          const num = data.number || data.Number || data.phoneNumber
+            || data.phone || data.Phone || data.dialNumber || data.DialNumber
+            || data.dialedNumber || data.DialedNumber || data.tonumber;
+          console.log("[CTI] Zoho Dial event, number:", num, "full data:", JSON.stringify(data));
+          if (num) setDialNumber(num);
+          break;
+        }
+
+        case "DialerActive":
+          console.log("[CTI] Zoho DialerActive — softphone panel toggled");
+          break;
+
+        case "PageLoad":
+          console.log("[CTI] Zoho PageLoad:", JSON.stringify(msg.data));
+          break;
+
+        default:
+          console.log("[CTI] Zoho unhandled event:", msg.eventName);
+      }
+    };
+
+    window.addEventListener("message", handler);
+
+    // Send REGISTER message to Zoho parent (replicates SDK's RegisterApp)
+    const appOrigin = encodeURIComponent(
+      window.location.protocol + "//" + window.location.host + window.location.pathname
+    );
+
+    const registerMsg = {
+      type: "SDK.EVENT",
+      eventName: "REGISTER",
+      appOrigin,
+    };
+
+    console.log("[CTI] Sending REGISTER to Zoho parent at", decodedOrigin);
+    window.parent.postMessage(registerMsg, decodedOrigin);
+
+    return () => window.removeEventListener("message", handler);
   }, []);
 
   const onDialNumberConsumed = useCallback(() => {
