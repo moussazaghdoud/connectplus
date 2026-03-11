@@ -413,7 +413,11 @@ export function useRainbowWebSDK(
         } as never);
 
         console.log("[WebRTC] SDK instance created, calling start()...");
-        const startResult = await instance.start();
+        const startPromise = instance.start();
+        const startTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("SDK start() timed out after 15s")), 15000)
+        );
+        const startResult = await Promise.race([startPromise, startTimeout]);
         console.log("[WebRTC] SDK start() result:", startResult);
         console.log("[WebRTC] SDK version:", instance.getVersion?.());
 
@@ -451,7 +455,7 @@ export function useRainbowWebSDK(
       const micOk = await requestMicAccess();
       if (!micOk) {
         setStatus("error");
-        return;
+        throw new Error("Microphone access denied — allow microphone in browser settings");
       }
 
       try {
@@ -461,7 +465,12 @@ export function useRainbowWebSDK(
             .filter(m => m !== "constructor"));
         console.log("[WebRTC] Attempting logon for:", email);
 
-        await sdk.connectionService.logon(email, password, false);
+        // Add timeout — SDK logon can hang if XMPP connection fails silently
+        const logonPromise = sdk.connectionService.logon(email, password, false);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Login timed out after 30s — Rainbow server may be unreachable")), 30000)
+        );
+        await Promise.race([logonPromise, timeoutPromise]);
         console.log("[WebRTC] Login successful");
 
         // Find and subscribe to all services that handle calls
@@ -565,6 +574,7 @@ export function useRainbowWebSDK(
         setStatus("error");
         const msg = err instanceof Error ? err.message : String(err);
         setError(`Login failed: ${msg}`);
+        throw err; // Re-throw so caller knows login failed
       }
     },
     [handleCallChanged, requestMicAccess]
